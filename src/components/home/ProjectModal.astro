@@ -14,13 +14,23 @@ const id = `proyecto-${project.id}`;
 
 <dialog id={id} class="modal" data-project-modal aria-labelledby={`${id}-titulo`}>
   <div class="media">
-    {
-      image ? (
-        <Image src={image} alt={`Captura de ${name}`} widths={[620, 1240]} sizes="(max-width: 660px) 100vw, 620px" />
-      ) : (
-        <span class="placeholder">Captura del proyecto</span>
-      )
-    }
+    <div class="frame">
+      {
+        image ? (
+          <Image
+            src={image}
+            alt={`Captura de ${name}`}
+            widths={[620, 1240]}
+            sizes="(max-width: 660px) 100vw, 620px"
+            data-modal-photo
+          />
+        ) : (
+          <span class="placeholder">Captura del proyecto</span>
+        )
+      }
+      <!-- La cortina tapa la imagen y se retira hacia abajo al abrir (ProjectList.astro). -->
+      <span class="curtain" data-modal-curtain aria-hidden="true"></span>
+    </div>
   </div>
 
   <div class="content">
@@ -61,6 +71,8 @@ const id = `proyecto-${project.id}`;
     padding: 0;
     overflow-x: hidden;
     overflow-y: auto;
+    /* El scroll no se escapa a la página cuando se llega al final del modal. */
+    overscroll-behavior: contain;
     border: 1px solid var(--rule);
     border-radius: 16px;
     background: var(--bg);
@@ -68,18 +80,18 @@ const id = `proyecto-${project.id}`;
     box-shadow: var(--shadow);
   }
 
-  .modal[open] {
-    animation: card-in 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  /* La tarjeta la anima GSAP; aquí solo queda el fondo, que es un pseudo-elemento. */
+  .modal::backdrop {
+    background: var(--veil, rgba(8, 7, 6, 0.62));
+    opacity: 0;
   }
 
   .modal[open]::backdrop {
-    background: var(--veil, rgba(8, 7, 6, 0.62));
-    backdrop-filter: blur(3px);
-    animation: veil-in 200ms ease both;
+    animation: veil-in 260ms ease forwards;
   }
 
-  .modal.is-closing {
-    animation: card-out 180ms cubic-bezier(0.4, 0, 0.6, 1) forwards;
+  .modal.is-closing::backdrop {
+    animation: veil-out 200ms ease forwards;
   }
 
   /* Mientras se divide el texto en líneas (ver el script de ProjectList.astro). */
@@ -87,26 +99,35 @@ const id = `proyecto-${project.id}`;
     visibility: hidden;
   }
 
-  .modal.is-closing::backdrop {
-    animation: veil-out 180ms ease forwards;
+  .media {
+    padding: clamp(22px, 3.6vw, 30px) clamp(22px, 3.6vw, 30px) 0;
   }
 
-  .media {
+  .frame {
     position: relative;
     width: 100%;
     aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    overflow: hidden;
     background: var(--tint);
-    border-bottom: 1px solid var(--rule);
     display: flex;
     align-items: center;
     justify-content: center;
-    overflow: hidden;
   }
 
-  .media :global(img) {
+  .frame :global(img) {
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+
+  .curtain {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    /* Se recoge hacia abajo, descubriendo la imagen de arriba hacia abajo. */
+    transform-origin: bottom;
+    will-change: transform;
   }
 
   .placeholder {

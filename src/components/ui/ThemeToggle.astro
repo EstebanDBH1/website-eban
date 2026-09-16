@@ -36,17 +36,31 @@
 </style>
 
 <script>
+  // Dura lo que la transición más larga de global.css (260ms) más un margen.
+  const SWITCH_MS = 320;
+  let switching: number | undefined;
+
+  function toggleTheme() {
+    const root = document.documentElement;
+    const next = root.dataset.theme === 'light' ? 'dark' : 'light';
+
+    // El atributo activa las transiciones de color en toda la página, solo por este rato.
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      root.setAttribute('data-theme-switching', '');
+      clearTimeout(switching);
+      switching = window.setTimeout(() => root.removeAttribute('data-theme-switching'), SWITCH_MS);
+    }
+
+    root.dataset.theme = next;
+    try {
+      localStorage.setItem('eb-theme', next);
+    } catch {}
+  }
+
   // Con <ClientRouter /> el DOM se reemplaza en cada navegación: enganchamos en cada carga.
   document.addEventListener('astro:page-load', () => {
     document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const root = document.documentElement;
-        const next = root.dataset.theme === 'light' ? 'dark' : 'light';
-        root.dataset.theme = next;
-        try {
-          localStorage.setItem('eb-theme', next);
-        } catch {}
-      });
+      button.addEventListener('click', toggleTheme);
     });
   });
 </script>

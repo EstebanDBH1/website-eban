@@ -21,8 +21,14 @@ gsap.registerPlugin(ScrollTrigger, SplitText);
 
 export const SPLIT_SELECTOR = '[data-split], [data-split-group] > *';
 
-// Los saltos de línea dependen de la fuente: esperamos a Newsreader, pero sin bloquear de más.
-const FONT_TIMEOUT_MS = 1000;
+/**
+ * Espera corta a que carguen las fuentes: con la fuente lista los cortes de línea salen bien
+ * a la primera. Si tarda más, arrancamos igual — autoSplit vuelve a dividir cuando llegue.
+ * Antes eran 1000 ms y se sentían como una página congelada al entrar.
+ */
+const FONT_TIMEOUT_MS = 300;
+/** Marca los elementos que todavía no se han dividido (ocultos por CSS, ver global.css). */
+const PENDING_ATTR = 'data-text-pending';
 const HIDDEN = { yPercent: 105 };
 const CLIPPED = { overflow: 'clip' };
 // overflow: clip no crea contexto de formato, así que pasar a visible no mueve nada;
@@ -40,12 +46,21 @@ function fontsReady() {
   ]);
 }
 
+function nextFrame() {
+  return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+}
+
 function byDocumentOrder(a: Element, b: Element) {
   return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
 }
 
+function isOnScreen(el: Element) {
+  const rect = el.getBoundingClientRect();
+  return rect.top < window.innerHeight && rect.bottom > 0;
+}
+
 export interface TextReveal {
-  /** Los elementos divididos, en orden del documento. */
+  /** Los elementos de texto, en orden del documento. */
   elements: HTMLElement[];
   /** Encola elementos para revelarlos en cascada, uno tras otro. */
   reveal(elements: Element[], options?: { delay?: number }): void;
@@ -59,6 +74,9 @@ export interface TextReveal {
 
 /**
  * Divide el texto de `root` (o de toda la página) y deja las líneas ocultas.
+ *
+ * Resuelve en cuanto está listo lo que se ve en pantalla, para que la animación arranque cuanto
+ * antes; el resto se divide en el frame siguiente y mientras tanto sigue oculto por CSS.
  *
  * El texto dentro de un <dialog> solo se divide cuando ese diálogo es el `root`: en uno cerrado
  * no hay medidas de línea, así que la portada no debe tocar el texto de los modales.
@@ -81,35 +99,55 @@ export async function createTextReveal(root?: Element): Promise<TextReveal> {
 
   const hideSplit = (split: SplitText) => {
     gsap.set(split.masks, CLIPPED);
-    gsap.set(split.lines, HIDDEN);
+    // will-change solo mientras la línea está por animarse; se limpia al terminar.
+    gsap.set(split.lines, { ...HIDDEN, willChange: 'transform' });
   };
 
   const finishSplit = (split: SplitText) => {
-    gsap.set(split.lines, { clearProps: 'transform' });
+    gsap.set(split.lines, { clearProps: 'transform,willChange' });
     gsap.set(split.masks, UNCLIPPED);
+  };
+
+  /** Divide el elemento si hace falta y lo destapa. Hasta entonces lo oculta PENDING_ATTR. */
+  const ensureSplit = (el: HTMLElement) => {
+    let split = splits.get(el);
+    if (!split) {
+      split = SplitText.create(el, {
+        type: 'lines',
+        mask: 'lines',
+        aria: 'none',
+        // Si cambia el ancho (o llega la fuente tarde), se re-divide con los cortes correctos.
+        autoSplit: true,
+        onSplit: (self) => (state.get(el) === 'done' ? finishSplit(self) : hideSplit(self)),
+      });
+      splits.set(el, split);
+    }
+    el.removeAttribute(PENDING_ATTR);
+    return split;
   };
 
   for (const el of elements) {
     state.set(el, 'hidden');
-    splits.set(
-      el,
-      SplitText.create(el, {
-        type: 'lines',
-        mask: 'lines',
-        aria: 'none',
-        // Si cambia el ancho, se re-divide con los saltos de línea correctos.
-        autoSplit: true,
-        onSplit: (self) => (state.get(el) === 'done' ? finishSplit(self) : hideSplit(self)),
-      }),
-    );
+    el.setAttribute(PENDING_ATTR, '');
   }
+
+  // Fase 1: solo lo que se ve. Dividir los ~30 textos de una bloquea el primer pintado.
+  elements.filter(isOnScreen).forEach(ensureSplit);
+
+  // Fase 2: el resto, ya con la animación en marcha.
+  nextFrame().then(() => {
+    if (destroyed) return;
+    for (const el of elements) if (state.get(el) === 'hidden') ensureSplit(el);
+  });
 
   /** Anima un elemento y resuelve cuando le toca el turno al siguiente (no cuando termina). */
   const revealElement = (el: HTMLElement, generationAtQueue: number) =>
     new Promise<void>((next) => {
-      const split = splits.get(el);
-      const lines = split?.lines ?? [];
-      if (destroyed || generationAtQueue !== generation || !lines.length) return next();
+      if (destroyed || generationAtQueue !== generation) return next();
+
+      const split = ensureSplit(el);
+      const lines = split.lines;
+      if (!lines.length) return next();
 
       // Marcamos 'done' al arrancar: si se re-divide a mitad de la animación, sale ya visible.
       state.set(el, 'done');
@@ -121,8 +159,8 @@ export async function createTextReveal(root?: Element): Promise<TextReveal> {
           duration,
           ease: 'expo.out',
           stagger,
-          clearProps: 'transform',
-          onComplete: () => split && finishSplit(split),
+          clearProps: 'transform,willChange',
+          onComplete: () => finishSplit(split),
         }),
         // El relevo es cuando arranca la última línea de este elemento: cascada continua.
         gsap.delayedCall(Math.min(lines.length * stagger, MAX_HANDOFF), next),
@@ -152,10 +190,11 @@ export async function createTextReveal(root?: Element): Promise<TextReveal> {
 
     showNow(batch) {
       for (const el of batch) {
-        const split = splits.get(el);
-        if (!split) continue;
         state.set(el, 'done');
-        finishSplit(split);
+        const split = splits.get(el);
+        // Si todavía no se dividió, mejor: se queda tal cual estaba, sin tocar el DOM.
+        if (split) finishSplit(split);
+        else (el as HTMLElement).removeAttribute(PENDING_ATTR);
       }
     },
 
@@ -169,6 +208,7 @@ export async function createTextReveal(root?: Element): Promise<TextReveal> {
         state.set(el, 'hidden');
         const split = splits.get(el);
         if (split) hideSplit(split);
+        else el.setAttribute(PENDING_ATTR, '');
       }
     },
 
@@ -177,6 +217,8 @@ export async function createTextReveal(root?: Element): Promise<TextReveal> {
       animations.forEach((animation) => animation.kill());
       // Solo apagamos autoSplit; sin revert (ver nota arriba).
       splits.forEach((split) => split.kill());
+      // Nada debe quedar invisible si la página sobrevive a la limpieza.
+      elements.forEach((el) => el.removeAttribute(PENDING_ATTR));
     },
   };
 }

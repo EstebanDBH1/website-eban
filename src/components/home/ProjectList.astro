@@ -50,18 +50,68 @@ const projects = await getProjects();
 </style>
 
 <script>
+  import { gsap } from 'gsap';
+  import { CustomEase } from 'gsap/CustomEase';
   import { createTextReveal, type TextReveal } from '@/scripts/text-reveal';
 
-  const CLOSE_MS = 180;
-  // Deja pasar la entrada de la tarjeta antes de que empiece a salir el texto.
-  const OPEN_DELAY = 0.12;
+  gsap.registerPlugin(CustomEase);
+
+  /*
+    Curva de la cortina. Las `expo.inOut` y compañía casi no se mueven al principio y luego
+    disparan: ese pico de velocidad en la mitad es lo que se siente brusco. Esta arranca suave
+    (primer punto en 0.33) y frena muy largo (segundo punto en 0.12), sin tirones.
+  */
+  const curtainEase = CustomEase.create('curtain', '0.33, 0, 0.12, 1');
+
+  const CARD_IN = { duration: 0.42, ease: 'expo.out' };
+  const CARD_OUT = { duration: 0.22, ease: 'power2.in' };
+  const CURTAIN = { duration: 1.25, ease: curtainEase };
+  /* El acercamiento de la foto dura más que la cortina: sigue vivo cuando ya se descubrió. */
+  const PHOTO = { duration: 1.9, ease: 'power2.out' };
+  const PHOTO_ZOOM = 1.08;
+  /* La tarjeta asienta primero; luego la cortina y, ya en marcha, el texto. */
+  const CURTAIN_AT = 0.12;
+  const TEXT_DELAY = 0.38;
 
   const reveals = new Map<HTMLDialogElement, TextReveal>();
+  const openings = new Map<HTMLDialogElement, gsap.core.Timeline>();
+
+  const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /**
+   * Con el modal abierto solo se desplaza el modal. El hueco que deja la barra de scroll de la
+   * página se compensa por CSS (--scrollbar-gap) para que el contenido no salte al abrir.
+   */
+  function lockScroll() {
+    const root = document.documentElement;
+    root.style.setProperty('--scrollbar-gap', `${window.innerWidth - root.clientWidth}px`);
+    root.setAttribute('data-modal-open', '');
+  }
+
+  function unlockScroll() {
+    document.documentElement.removeAttribute('data-modal-open');
+  }
 
   async function openDialog(dialog: HTMLDialogElement) {
+    const curtain = dialog.querySelector('[data-modal-curtain]');
+    const photo = dialog.querySelector('[data-modal-photo]');
+
+    if (reducedMotion()) {
+      gsap.set(curtain, { scaleY: 0 });
+      dialog.showModal();
+      lockScroll();
+      return;
+    }
+
     // El texto no se ve mientras lo dividimos en líneas: así no hay parpadeo al abrir.
     dialog.classList.add('is-preparing');
+    gsap.set(dialog, { autoAlpha: 0 });
+    gsap.set(curtain, { scaleY: 1 });
+    if (photo) gsap.set(photo, { scale: PHOTO_ZOOM });
+
     dialog.showModal();
+    lockScroll();
+    dialog.scrollTop = 0;
 
     let reveal = reveals.get(dialog);
     if (!reveal) {
@@ -74,16 +124,42 @@ const projects = await getProjects();
     // En reaperturas hay que volver a esconder el texto revelado la vez anterior.
     reveal.hideAll();
     dialog.classList.remove('is-preparing');
-    reveal.reveal(reveal.elements, { delay: OPEN_DELAY });
+
+    const timeline = gsap.timeline();
+    timeline
+      .fromTo(dialog, { autoAlpha: 0, y: 18, scale: 0.985 }, { autoAlpha: 1, y: 0, scale: 1, ...CARD_IN })
+      .to(curtain, { scaleY: 0, ...CURTAIN }, CURTAIN_AT);
+    if (photo) timeline.to(photo, { scale: 1, ...PHOTO }, CURTAIN_AT);
+
+    openings.set(dialog, timeline);
+    reveal.reveal(reveal.elements, { delay: TEXT_DELAY });
   }
 
   function closeDialog(dialog: HTMLDialogElement) {
     if (!dialog.open || dialog.classList.contains('is-closing')) return;
-    dialog.classList.add('is-closing');
-    setTimeout(() => {
-      dialog.classList.remove('is-closing');
+
+    openings.get(dialog)?.kill();
+    openings.delete(dialog);
+
+    if (reducedMotion()) {
       dialog.close();
-    }, CLOSE_MS);
+      unlockScroll();
+      return;
+    }
+
+    dialog.classList.add('is-closing');
+    gsap.to(dialog, {
+      autoAlpha: 0,
+      y: 10,
+      scale: 0.99,
+      ...CARD_OUT,
+      onComplete: () => {
+        dialog.classList.remove('is-closing');
+        dialog.close();
+        unlockScroll();
+        gsap.set(dialog, { clearProps: 'all' });
+      },
+    });
   }
 
   // Con <ClientRouter /> el DOM se reemplaza en cada navegación: enganchamos en cada carga.
@@ -120,9 +196,11 @@ const projects = await getProjects();
     });
   });
 
-  // Los diálogos se van con la página: soltamos sus splits y listeners de resize.
+  // Los diálogos se van con la página: soltamos sus splits, listeners y el bloqueo del scroll.
   document.addEventListener('astro:before-swap', () => {
     reveals.forEach((reveal) => reveal.destroy());
     reveals.clear();
+    openings.clear();
+    unlockScroll();
   });
 </script>

@@ -43,7 +43,24 @@ body {
   color: var(--ink);
   font-family: 'Newsreader', 'Iowan Old Style', Georgia, serif;
   -webkit-font-smoothing: antialiased;
-  transition: background 260ms ease, color 260ms ease;
+}
+
+/*
+  Cambio de tema: todo transiciona junto y SOLO durante el cambio (el interruptor pone y quita
+  data-theme-switching). Antes solo body transicionaba y el resto —textos apagados, bordes,
+  el modal— saltaba de golpe: esa mezcla de dos velocidades se veía como un parpadeo.
+  No se incluye transform a propósito: chocaría con las animaciones de GSAP.
+*/
+html[data-theme-switching] *,
+html[data-theme-switching] *::before,
+html[data-theme-switching] *::after {
+  transition: background-color 220ms ease, color 220ms ease, border-color 220ms ease,
+    text-decoration-color 220ms ease, box-shadow 220ms ease !important;
+}
+
+/* Excepción: el punto del interruptor tiene que seguir deslizándose. */
+html[data-theme-switching] .knob {
+  transition: transform 260ms cubic-bezier(0.4, 0.1, 0.2, 1), background-color 220ms ease !important;
 }
 
 a {
@@ -106,14 +123,18 @@ dialog {
   to { opacity: 0; }
 }
 
-@keyframes card-in {
-  from { opacity: 0; transform: translateY(18px) scale(0.985); }
-  to { opacity: 1; transform: none; }
+/*
+  Modal abierto: solo se desplaza el modal. El padding ocupa el lugar de la barra de scroll que
+  desaparece, para que el contenido no salte de lado al abrir ni al cerrar.
+*/
+html[data-modal-open] {
+  overflow: hidden;
+  padding-right: var(--scrollbar-gap, 0px);
 }
 
-@keyframes card-out {
-  from { opacity: 1; transform: none; }
-  to { opacity: 0; transform: translateY(10px) scale(0.99); }
+/* Texto que todavía no se ha dividido en líneas (src/scripts/text-reveal.ts). */
+[data-text-pending] {
+  visibility: hidden;
 }
 
 /* Bloques que GSAP revela al entrar a una página (src/scripts/page-transitions.ts). */
