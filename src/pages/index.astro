@@ -1,0 +1,29 @@
+---
+import Intro from '@/components/home/Intro.astro';
+import PostList from '@/components/home/PostList.astro';
+import ProjectList from '@/components/home/ProjectList.astro';
+import SocialLinks from '@/components/home/SocialLinks.astro';
+import Footer from '@/components/layout/Footer.astro';
+import Header from '@/components/layout/Header.astro';
+import Section from '@/components/ui/Section.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+---
+
+<BaseLayout>
+  <Header />
+  <Intro />
+
+  <Section title="Proyectos" subtitle="Cosas que empecé por curiosidad y terminé usando todos los días.">
+    <ProjectList />
+  </Section>
+
+  <Section title="Artículos">
+    <PostList />
+  </Section>
+
+  <Section title="Dónde encontrarme">
+    <SocialLinks />
+  </Section>
+
+  <Footer />
+</BaseLayout>

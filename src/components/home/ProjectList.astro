@@ -1,0 +1,128 @@
+---
+import ProjectModal from '@/components/home/ProjectModal.astro';
+import { getProjects } from '@/lib/content';
+
+const projects = await getProjects();
+---
+
+<ul>
+  {
+    projects.map((project) => (
+      <li>
+        <a href={`#proyecto-${project.id}`} data-project-trigger={`proyecto-${project.id}`} data-split>
+          {project.data.name}
+        </a>
+        <span data-split>{project.data.description}</span>
+      </li>
+    ))
+  }
+</ul>
+
+{projects.map((project) => <ProjectModal project={project} />)}
+
+<style>
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  li {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  a {
+    font-size: 18px;
+    width: fit-content;
+  }
+
+  span {
+    font-size: 15.5px;
+    line-height: 1.55;
+    color: var(--muted);
+    text-wrap: pretty;
+  }
+</style>
+
+<script>
+  import { createTextReveal, type TextReveal } from '@/scripts/text-reveal';
+
+  const CLOSE_MS = 180;
+  // Deja pasar la entrada de la tarjeta antes de que empiece a salir el texto.
+  const OPEN_DELAY = 0.12;
+
+  const reveals = new Map<HTMLDialogElement, TextReveal>();
+
+  async function openDialog(dialog: HTMLDialogElement) {
+    // El texto no se ve mientras lo dividimos en líneas: así no hay parpadeo al abrir.
+    dialog.classList.add('is-preparing');
+    dialog.showModal();
+
+    let reveal = reveals.get(dialog);
+    if (!reveal) {
+      // Dividir necesita el diálogo abierto: dentro de uno cerrado no hay medidas de línea.
+      reveal = await createTextReveal(dialog);
+      reveals.set(dialog, reveal);
+    }
+    if (!dialog.open) return;
+
+    // En reaperturas hay que volver a esconder el texto revelado la vez anterior.
+    reveal.hideAll();
+    dialog.classList.remove('is-preparing');
+    reveal.reveal(reveal.elements, { delay: OPEN_DELAY });
+  }
+
+  function closeDialog(dialog: HTMLDialogElement) {
+    if (!dialog.open || dialog.classList.contains('is-closing')) return;
+    dialog.classList.add('is-closing');
+    setTimeout(() => {
+      dialog.classList.remove('is-closing');
+      dialog.close();
+    }, CLOSE_MS);
+  }
+
+  // Con <ClientRouter /> el DOM se reemplaza en cada navegación: enganchamos en cada carga.
+  document.addEventListener('astro:page-load', () => {
+    document.querySelectorAll<HTMLAnchorElement>('[data-project-trigger]').forEach((link) => {
+      link.addEventListener('click', (event) => {
+        const dialog = document.getElementById(link.dataset.projectTrigger ?? '');
+        if (!(dialog instanceof HTMLDialogElement)) return;
+        event.preventDefault();
+        openDialog(dialog);
+      });
+    });
+
+    document.querySelectorAll<HTMLDialogElement>('dialog[data-project-modal]').forEach((dialog) => {
+      // Esc: animamos el cierre en lugar del cierre instantáneo del navegador.
+      dialog.addEventListener('cancel', (event) => {
+        event.preventDefault();
+        closeDialog(dialog);
+      });
+
+      dialog.addEventListener('click', (event) => {
+        const target = event.target as Element;
+        if (target.closest('[data-close]')) return closeDialog(dialog);
+
+        // Clic en el fondo (fuera de la tarjeta).
+        const rect = dialog.getBoundingClientRect();
+        const inside =
+          event.clientX >= rect.left &&
+          event.clientX <= rect.right &&
+          event.clientY >= rect.top &&
+          event.clientY <= rect.bottom;
+        if (!inside) closeDialog(dialog);
+      });
+    });
+  });
+
+  // Los diálogos se van con la página: soltamos sus splits y listeners de resize.
+  document.addEventListener('astro:before-swap', () => {
+    reveals.forEach((reveal) => reveal.destroy());
+    reveals.clear();
+  });
+</script>

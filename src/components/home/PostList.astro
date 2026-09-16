@@ -1,0 +1,45 @@
+---
+import { SITE } from '@/config/site';
+import { getPosts } from '@/lib/content';
+
+const posts = await getPosts();
+---
+
+<ul>
+  {
+    posts.map((post) => (
+      <li>
+        <a href={`/articulos/${post.id}/`} data-split>
+          {post.data.title}
+        </a>
+        {SITE.showYears && <span data-split>{post.data.year}</span>}
+      </li>
+    ))
+  }
+</ul>
+
+<style>
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+  }
+
+  li {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 17.5px;
+    line-height: 1.45;
+  }
+
+  span {
+    flex: none;
+    font-size: 14px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+</style>

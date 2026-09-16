@@ -1,0 +1,52 @@
+<button type="button" class="theme-toggle" data-theme-toggle aria-label="Cambiar tema">
+  <span class="knob"></span>
+</button>
+
+<style>
+  .theme-toggle {
+    flex: none;
+    width: 34px;
+    height: 18px;
+    padding: 2px;
+    border: 1px solid var(--rule);
+    cursor: pointer;
+    border-radius: 999px;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    transition: border-color 200ms ease;
+  }
+
+  .theme-toggle:hover {
+    border-color: var(--rule-strong);
+  }
+
+  .theme-toggle:hover .knob {
+    background: var(--ink);
+  }
+
+  .knob {
+    width: 12px;
+    height: 12px;
+    border-radius: 999px;
+    background: var(--muted);
+    transform: translateX(var(--knob-x));
+    transition: transform 260ms cubic-bezier(0.4, 0.1, 0.2, 1), background 200ms ease;
+  }
+</style>
+
+<script>
+  // Con <ClientRouter /> el DOM se reemplaza en cada navegación: enganchamos en cada carga.
+  document.addEventListener('astro:page-load', () => {
+    document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const root = document.documentElement;
+        const next = root.dataset.theme === 'light' ? 'dark' : 'light';
+        root.dataset.theme = next;
+        try {
+          localStorage.setItem('eb-theme', next);
+        } catch {}
+      });
+    });
+  });
+</script>

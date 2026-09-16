@@ -1,0 +1,17 @@
+{
+  "name": "pagina-personal-esteban",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "astro": "^7.3.2",
+    "gsap": "^3.15.0"
+  }
+}

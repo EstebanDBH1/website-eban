@@ -1,0 +1,101 @@
+---
+import type { GetStaticPaths } from 'astro';
+import { render } from 'astro:content';
+import { SITE } from '@/config/site';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { getPosts } from '@/lib/content';
+
+export const getStaticPaths = (async () => {
+  const posts = await getPosts();
+  return posts.map((post) => ({ params: { slug: post.id }, props: { post } }));
+}) satisfies GetStaticPaths;
+
+const { post } = Astro.props;
+const { title, excerpt, year, readingTime } = post.data;
+const { Content } = await render(post);
+---
+
+<BaseLayout title={title} description={excerpt}>
+  <article>
+    <a href="/" class="back" data-reveal>← {SITE.name}</a>
+    <p class="meta" data-reveal>{year} · {readingTime} de lectura</p>
+    <h1 data-reveal>{title}</h1>
+    <p class="excerpt" data-reveal>{excerpt}</p>
+
+    <div class="prose" data-reveal>
+      <Content />
+    </div>
+
+    <nav data-reveal>
+      <a href="/">← Volver al inicio</a>
+      <span>{SITE.name}</span>
+    </nav>
+  </article>
+</BaseLayout>
+
+<style>
+  .back {
+    font-size: 15.5px;
+    text-decoration: none;
+    color: var(--muted);
+    display: inline-block;
+    margin-bottom: 38px;
+  }
+
+  .meta {
+    margin: 0 0 10px;
+    font-size: 13px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  h1 {
+    margin: 0 0 14px;
+    font-size: clamp(30px, 5.4vw, 40px);
+    font-weight: 600;
+    line-height: 1.14;
+    letter-spacing: -0.018em;
+    text-wrap: pretty;
+  }
+
+  .excerpt {
+    margin: 0 0 34px;
+    font-size: clamp(18px, 2.6vw, 20px);
+    line-height: 1.5;
+    color: var(--muted);
+    font-style: italic;
+    text-wrap: pretty;
+  }
+
+  .prose {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    font-size: clamp(17.5px, 2.4vw, 19px);
+    line-height: 1.68;
+    text-wrap: pretty;
+  }
+
+  .prose :global(p) {
+    margin: 0;
+  }
+
+  nav {
+    margin-top: 52px;
+    padding-top: 20px;
+    border-top: 1px solid var(--rule);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    font-size: 15.5px;
+    color: var(--muted);
+  }
+
+  nav a {
+    color: var(--muted);
+    text-decoration: none;
+  }
+</style>

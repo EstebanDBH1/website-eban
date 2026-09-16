@@ -1,0 +1,74 @@
+---
+import { ClientRouter } from 'astro:transitions';
+import { SITE } from '@/config/site';
+import '@/styles/global.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const { title, description = SITE.description } = Astro.props;
+const pageTitle = title ? `${title} · ${SITE.name}` : SITE.name;
+---
+
+<!doctype html>
+<html
+  lang={SITE.lang}
+  data-theme={SITE.defaultTheme}
+  style={`--accent: ${SITE.accent}`}
+  transition:animate="none"
+>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap"
+    />
+    <!--
+      Antes del primer pintado: aplica el tema guardado y oculta los bloques [data-reveal]
+      para que GSAP los revele (ver src/scripts/page-transitions.ts).
+    -->
+    <script is:inline>
+      try {
+        const saved = localStorage.getItem('eb-theme');
+        if (saved === 'light' || saved === 'dark') document.documentElement.dataset.theme = saved;
+      } catch (e) {}
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        document.documentElement.setAttribute('data-page-enter', '');
+      }
+    </script>
+    <ClientRouter />
+    <script>
+      import '@/scripts/page-transitions';
+    </script>
+  </head>
+  <body>
+    <div class="page">
+      <main>
+        <slot />
+      </main>
+    </div>
+  </body>
+</html>
+
+<style>
+  .page {
+    min-height: 100vh;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: clamp(36px, 7vw, 92px) 22px 96px;
+  }
+
+  main {
+    width: 100%;
+    max-width: 620px;
+  }
+</style>

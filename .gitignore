@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.astro/
+.DS_Store
+
+# Export original de Claude Design, solo de referencia local (no entra al sitio).
+_diseno-original/

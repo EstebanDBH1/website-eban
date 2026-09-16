@@ -1,0 +1,27 @@
+---
+import { SOCIAL_LINKS } from '@/config/site';
+---
+
+<ul>
+  {
+    SOCIAL_LINKS.map((link) => (
+      <li>
+        <a href={link.href} data-split>
+          {link.label}
+        </a>
+      </li>
+    ))
+  }
+</ul>
+
+<style>
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+    font-size: 17.5px;
+  }
+</style>
