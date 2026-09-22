@@ -29,12 +29,18 @@ export const GET: APIRoute = async ({ params, request }) => {
     }
   }
 
-  const png = await renderCard({ title, meta, origin, host });
+  try {
+    const png = await renderCard({ title, meta, origin, host });
 
-  return new Response(new Uint8Array(png), {
-    headers: {
-      'Content-Type': 'image/png',
-      'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
-    },
-  });
+    return new Response(new Uint8Array(png), {
+      headers: {
+        'Content-Type': 'image/png',
+        'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+      },
+    });
+  } catch (error) {
+    // Que falle la tarjeta no debe devolver un 502 mudo: sin esto, depurarlo es adivinar.
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    return new Response(detail, { status: 500, headers: { 'Content-Type': 'text/plain' } });
+  }
 };
