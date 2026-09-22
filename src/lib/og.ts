@@ -32,6 +32,51 @@ function load(origin: string) {
   return Promise.all([fontCache, wasmCache]);
 }
 
+/** Tiempos de cada fase. Sirve para saber qué es lo lento en la función, no en local. */
+export async function timeCard(origin: string) {
+  const marks: string[] = [];
+  const clock = async <T>(label: string, work: () => Promise<T> | T) => {
+    const start = Date.now();
+    try {
+      const value = await work();
+      marks.push(`${label}: ${Date.now() - start} ms`);
+      return value;
+    } catch (error) {
+      marks.push(`${label}: FALLÓ tras ${Date.now() - start} ms — ${(error as Error).message}`);
+      throw error;
+    }
+  };
+
+  try {
+    const font = await clock('descargar fuente', () =>
+      fetch(`${origin}/fonts/newsreader-600.woff`).then((r) => r.arrayBuffer()),
+    );
+    const wasmBytes = await clock('descargar wasm', () =>
+      fetch(`${origin}/resvg.wasm`).then((r) => r.arrayBuffer()),
+    );
+    await clock('compilar wasm', () => initWasm(wasmBytes));
+    const svg = await clock('satori', () =>
+      satori(
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', width: '100%', height: '100%', backgroundColor: BG },
+            children: 'Prueba',
+          },
+        },
+        { width: WIDTH, height: HEIGHT, fonts: [{ name: 'Newsreader', data: font, weight: 600, style: 'normal' }] },
+      ),
+    );
+    await clock('resvg a png', () =>
+      new Resvg(svg, { fitTo: { mode: 'width', value: WIDTH } }).render().asPng(),
+    );
+  } catch {
+    // Los tiempos ya están recogidos; el fallo se cuenta en la última marca.
+  }
+
+  return marks.join('\n');
+}
+
 /** Los títulos largos bajan de cuerpo para que siempre quepan sin cortarse. */
 function titleSize(title: string) {
   if (title.length > 70) return 54;

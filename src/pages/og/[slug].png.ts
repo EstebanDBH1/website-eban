@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { SITE } from '@/config/site';
 import { getPost } from '@/lib/content';
-import { renderCard } from '@/lib/og';
+import { renderCard, timeCard } from '@/lib/og';
 
 /**
  * Imagen de compartir de cada post: /og/<slug>.png
@@ -16,6 +16,11 @@ export const prerender = false;
 export const GET: APIRoute = async ({ params, request }) => {
   const { origin, host } = new URL(request.url);
   const slug = params.slug ?? 'home';
+
+  // ?debug=1 devuelve los tiempos de cada fase en vez de la imagen.
+  if (new URL(request.url).searchParams.has('debug')) {
+    return new Response(await timeCard(origin), { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+  }
 
   let title = SITE.name;
   let meta = SITE.description;
