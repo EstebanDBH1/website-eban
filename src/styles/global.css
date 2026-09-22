@@ -10,6 +10,7 @@
   --tint: rgba(255, 255, 255, 0.028);
   --veil: rgba(8, 7, 6, 0.62);
   --shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  --danger: #d2836c;
   color-scheme: dark;
 }
 
@@ -23,6 +24,7 @@
   --tint: rgba(35, 33, 29, 0.035);
   --veil: rgba(70, 62, 48, 0.32);
   --shadow: 0 30px 70px rgba(60, 52, 40, 0.18);
+  --danger: #a4472f;
   color-scheme: light;
 }
 
@@ -85,6 +87,11 @@ a:hover {
 img {
   max-width: 100%;
   display: block;
+}
+
+/* img { display: block } le gana al [hidden] del navegador: hay que reforzarlo. */
+[hidden] {
+  display: none !important;
 }
 
 /* Barras de scroll discretas (página y modal). Firefox: */

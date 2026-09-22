@@ -1,0 +1,809 @@
+---
+import { SITE } from '@/config/site';
+import '@/styles/global.css';
+
+/**
+ * Panel de administración.
+ *
+ * A diferencia del resto del sitio no usa BaseLayout: aquí no queremos <ClientRouter />,
+ * ni GSAP, ni los reveals — es una herramienta, no una página que se lee. Por eso monta
+ * su propio <html> y su script arranca directo (ver src/scripts/admin.ts).
+ */
+---
+
+<!doctype html>
+<html lang={SITE.lang} data-theme={SITE.defaultTheme} style={`--accent: ${SITE.accent}`}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Panel · {SITE.name}</title>
+    <!-- Es una herramienta privada: fuera de los buscadores. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap"
+    />
+    <script is:inline>
+      try {
+        const saved = localStorage.getItem('eb-theme');
+        if (saved === 'light' || saved === 'dark') document.documentElement.dataset.theme = saved;
+      } catch (e) {}
+    </script>
+  </head>
+
+  <body>
+    <div class="shell">
+      <!-- ENTRAR -->
+      <section id="auth" class="card auth" hidden>
+        <h1>Panel</h1>
+        <p class="lead">Entra para editar los proyectos y los artículos del sitio.</p>
+
+        <!--
+          Solo iniciar sesión. El panel tiene un único dueño y su usuario se crea desde el
+          dashboard de Supabase; no hay registro aquí ni debe haberlo.
+        -->
+        <form id="login">
+          <label for="email">Correo</label>
+          <input id="email" type="email" autocomplete="username" required />
+
+          <label for="password">Contraseña</label>
+          <input id="password" type="password" autocomplete="current-password" required minlength="6" />
+
+          <p id="auth-error" class="error" hidden></p>
+
+          <div class="auth-actions">
+            <button type="submit" class="primary">Entrar</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- PANEL -->
+      <main id="app" hidden>
+        <header class="top">
+          <div>
+            <h1>Panel</h1>
+            <p class="who">Sesión: <span id="who"></span></p>
+          </div>
+          <div class="top-actions">
+            <a href="/">Ver el sitio ↗</a>
+            <button type="button" id="logout" class="link">Salir</button>
+          </div>
+        </header>
+
+        <nav class="tabs">
+          <button type="button" data-tab="projects" aria-current="true">Proyectos</button>
+          <button type="button" data-tab="posts">Artículos</button>
+        </nav>
+
+        <div class="toolbar">
+          <button type="button" id="new" class="primary">+ Nuevo proyecto</button>
+        </div>
+
+        <p id="status" class="status" hidden></p>
+
+        <ul id="list" class="list"></ul>
+
+        <p class="note">
+          Lo que guardes aquí entra en la base de datos. El sitio es estático: aparece en la web
+          cuando se vuelva a construir.
+        </p>
+      </main>
+    </div>
+
+    <!-- EDITOR -->
+    <dialog id="editor" class="editor">
+      <form id="editor-form" method="dialog">
+        <header class="editor-top">
+          <h2 id="editor-title">Nuevo proyecto</h2>
+          <button type="button" class="close" data-editor-close aria-label="Cerrar">✕</button>
+        </header>
+
+        <div id="editor-fields" class="fields"></div>
+
+        <footer class="editor-foot">
+          <button type="button" class="link" data-editor-close>Cancelar</button>
+          <button type="submit" class="primary">Guardar</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <script>
+      import '@/scripts/admin';
+    </script>
+
+    <style is:global>
+      /* El panel es una herramienta: tipografía de sistema para lo que se opera,
+         y la serif del sitio solo en los títulos, para que se sienta la misma casa. */
+      body {
+        font-family:
+          ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        font-size: 15px;
+      }
+
+      h1,
+      h2 {
+        font-family: 'Newsreader', Georgia, serif;
+        font-weight: 600;
+        letter-spacing: -0.012em;
+      }
+
+      .shell {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: clamp(28px, 6vw, 64px) 20px 80px;
+      }
+
+      /* ── Entrar ─────────────────────────────────────────────── */
+
+      .auth {
+        max-width: 380px;
+        margin: clamp(40px, 12vh, 120px) auto 0;
+      }
+
+      .auth h1 {
+        margin: 0 0 6px;
+        font-size: 26px;
+      }
+
+      .lead {
+        margin: 0 0 22px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      #login {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      #login label {
+        margin-top: 10px;
+      }
+
+      .auth-actions {
+        margin-top: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      /* ── Cabecera ───────────────────────────────────────────── */
+
+      .top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 20px;
+        flex-wrap: wrap;
+      }
+
+      .top h1 {
+        margin: 0;
+        font-size: 27px;
+      }
+
+      .who {
+        margin: 4px 0 0;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .top-actions {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-size: 14px;
+      }
+
+      .tabs {
+        margin-top: 28px;
+        display: flex;
+        gap: 4px;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .tabs button {
+        padding: 9px 14px;
+        border: none;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
+        background: transparent;
+        color: var(--muted);
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .tabs button[aria-current] {
+        color: var(--ink);
+        border-bottom-color: var(--accent);
+      }
+
+      .toolbar {
+        margin-top: 20px;
+      }
+
+      .status {
+        margin: 16px 0 0;
+        padding: 10px 13px;
+        border: 1px solid var(--rule);
+        border-radius: 9px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      .status[data-kind='error'] {
+        border-color: var(--danger);
+        color: var(--danger);
+      }
+
+      .status[data-kind='ok'] {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .note {
+        margin-top: 34px;
+        padding-top: 16px;
+        border-top: 1px solid var(--rule);
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--muted);
+      }
+
+      /* ── Lista ──────────────────────────────────────────────── */
+
+      .list {
+        margin: 18px 0 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .list li {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 14px;
+        border: 1px solid var(--rule);
+        border-radius: 11px;
+        background: var(--tint);
+      }
+
+      .list li.empty {
+        display: block;
+        background: transparent;
+        border-style: dashed;
+        padding: 26px 18px;
+        text-align: center;
+        color: var(--muted);
+      }
+
+      .order {
+        flex: none;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .order button {
+        width: 22px;
+        height: 18px;
+        padding: 0;
+        border: 1px solid var(--rule);
+        border-radius: 5px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 10px;
+        line-height: 1;
+        cursor: pointer;
+      }
+
+      .order button:disabled {
+        opacity: 0.3;
+        cursor: default;
+      }
+
+      .info {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .name {
+        font-weight: 500;
+      }
+
+      .sub {
+        font-size: 13px;
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .badge {
+        flex: none;
+        padding: 3px 9px;
+        border: 1px solid var(--rule);
+        border-radius: 999px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .badge[data-draft='false'] {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .actions {
+        flex: none;
+        display: flex;
+        gap: 6px;
+      }
+
+      /* ── Editor ─────────────────────────────────────────────── */
+
+      .editor {
+        /* Más ancho que el modal del sitio: aquí se escribe, no se lee. */
+        width: min(820px, calc(100% - 32px));
+        max-width: none;
+        max-height: 88vh;
+        padding: 0;
+        overflow: hidden auto;
+        overscroll-behavior: contain;
+        border: 1px solid var(--rule);
+        border-radius: 15px;
+        background: var(--bg);
+        color: var(--ink);
+        box-shadow: var(--shadow);
+      }
+
+      .editor::backdrop {
+        background: var(--veil);
+      }
+
+      .editor form {
+        padding: clamp(20px, 3.5vw, 28px);
+      }
+
+      .editor-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+
+      .editor-top h2 {
+        margin: 0;
+        font-size: 21px;
+      }
+
+      .fields {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .editor-foot {
+        margin-top: 26px;
+        padding-top: 18px;
+        border-top: 1px solid var(--rule);
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 14px;
+      }
+
+      /* ── Campos ─────────────────────────────────────────────── */
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      .field.inline {
+        flex-direction: row;
+        align-items: center;
+        gap: 9px;
+      }
+
+      .field.inline label {
+        margin: 0;
+      }
+
+      .hint {
+        margin: 0;
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: var(--muted);
+      }
+
+      .field.inline .hint {
+        flex-basis: 100%;
+      }
+
+      label {
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      input[type='text'],
+      input[type='email'],
+      input[type='password'],
+      input[type='number'],
+      textarea {
+        width: 100%;
+        padding: 9px 11px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: var(--tint);
+        color: var(--ink);
+        font: inherit;
+        transition: border-color 150ms ease;
+      }
+
+      textarea {
+        resize: vertical;
+        line-height: 1.55;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 13.5px;
+      }
+
+      input:focus-visible,
+      textarea:focus-visible,
+      button:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+        border-color: transparent;
+      }
+
+      input[type='checkbox'] {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--accent);
+      }
+
+      input[type='file'] {
+        font-size: 13px;
+        color: var(--muted);
+        max-width: 100%;
+      }
+
+      .image-picker {
+        margin-top: 4px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .image-picker img {
+        width: 120px;
+        aspect-ratio: 16 / 9;
+        object-fit: cover;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+      }
+
+      /* ── Editor de texto enriquecido ────────────────────────── */
+
+      .editor-shell {
+        border: 1px solid var(--rule);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+
+      .editor-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--rule);
+        background: var(--bg);
+      }
+
+      .editor-toolbar button {
+        min-width: 30px;
+        height: 28px;
+        padding: 0 7px;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1;
+        cursor: pointer;
+        transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+      }
+
+      .editor-toolbar button:hover {
+        color: var(--ink);
+        background: var(--tint);
+        border-color: var(--rule);
+      }
+
+      .editor-toolbar button.is-active {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+
+      .editor-toolbar .divider {
+        width: 1px;
+        height: 16px;
+        margin: 0 5px;
+        background: var(--rule);
+      }
+
+      .editor-surface {
+        max-height: 46vh;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+      }
+
+      /* El texto se escribe con la misma serif del sitio: lo que ves es lo que se publica. */
+      .editor-content {
+        min-height: 180px;
+        padding: 16px 18px;
+        font-family: 'Newsreader', Georgia, serif;
+        font-size: 17px;
+        line-height: 1.65;
+        outline: none;
+      }
+
+      .editor-content > * {
+        margin: 0 0 14px;
+      }
+
+      .editor-content > *:last-child {
+        margin-bottom: 0;
+      }
+
+      .editor-content h2 {
+        margin-top: 26px;
+        font-size: 22px;
+      }
+
+      .editor-content h3 {
+        margin-top: 22px;
+        font-size: 18.5px;
+      }
+
+      .editor-content h2:first-child,
+      .editor-content h3:first-child {
+        margin-top: 0;
+      }
+
+      .editor-content a {
+        color: var(--accent);
+      }
+
+      .editor-content blockquote {
+        padding-left: 14px;
+        border-left: 2px solid var(--rule-strong);
+        color: var(--muted);
+        font-style: italic;
+      }
+
+      .editor-content ul,
+      .editor-content ol {
+        padding-left: 22px;
+      }
+
+      .editor-content li {
+        margin-bottom: 4px;
+      }
+
+      .editor-content code {
+        padding: 1px 5px;
+        border-radius: 5px;
+        background: var(--tint);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.88em;
+      }
+
+      .editor-content pre {
+        padding: 12px 14px;
+        border-radius: 8px;
+        background: var(--tint);
+        overflow-x: auto;
+      }
+
+      .editor-content pre code {
+        padding: 0;
+        background: none;
+      }
+
+      .editor-content img {
+        max-width: 100%;
+        border-radius: 8px;
+      }
+
+      .editor-content hr {
+        border: none;
+        border-top: 1px solid var(--rule);
+      }
+
+      .editor-content .ProseMirror-selectednode {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .meter {
+        margin: 7px 0 0;
+        font-size: 12.5px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ── Subir imagen ───────────────────────────────────────── */
+
+      .dropzone-box {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .dropzone {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        border: 1px dashed var(--rule-strong);
+        border-radius: 10px;
+        background: var(--tint);
+        cursor: pointer;
+        overflow: hidden;
+        transition: border-color 140ms ease, background 140ms ease;
+      }
+
+      .dropzone:hover,
+      .dropzone.is-over {
+        border-color: var(--accent);
+      }
+
+      .dropzone.is-over {
+        background: color-mix(in srgb, var(--accent) 8%, transparent);
+      }
+
+      .dropzone.has-image {
+        border-style: solid;
+      }
+
+      .dropzone-preview {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .dropzone-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+        padding: 0 16px;
+        text-align: center;
+        font-size: 13.5px;
+        color: var(--muted);
+      }
+
+      .dropzone-empty strong {
+        color: var(--ink);
+        font-weight: 500;
+      }
+
+      .dropzone-empty span {
+        font-size: 12.5px;
+      }
+
+      .dropzone-busy {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: color-mix(in srgb, var(--bg) 72%, transparent);
+        font-size: 13px;
+        color: var(--ink);
+      }
+
+      /* ── Botones ────────────────────────────────────────────── */
+
+      button {
+        font: inherit;
+      }
+
+      .primary,
+      .actions button,
+      .close {
+        padding: 8px 15px;
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        background: transparent;
+        color: var(--ink);
+        cursor: pointer;
+        transition: border-color 150ms ease, color 150ms ease;
+      }
+
+      .primary {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .primary:hover,
+      .actions button:hover {
+        border-color: var(--rule-strong);
+      }
+
+      .actions button {
+        padding: 6px 11px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .close {
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .danger:hover {
+        border-color: var(--danger);
+        color: var(--danger);
+      }
+
+      .link {
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        text-decoration-color: var(--rule-strong);
+        cursor: pointer;
+      }
+
+      .link:hover {
+        color: var(--accent);
+      }
+
+      .error {
+        margin: 12px 0 0;
+        font-size: 13.5px;
+        line-height: 1.45;
+        color: var(--danger);
+      }
+
+      @media (max-width: 560px) {
+        .list li {
+          flex-wrap: wrap;
+        }
+
+        .info {
+          flex-basis: 100%;
+          order: -1;
+        }
+      }
+    </style>
+  </body>
+</html>

@@ -15,13 +15,20 @@ const id = `proyecto-${project.id}`;
 <dialog id={id} class="modal" data-project-modal aria-labelledby={`${id}-titulo`}>
   <div class="media">
     <div class="frame">
+      <!--
+        loading="eager" a propósito: dentro de un <dialog> cerrado (display: none) una imagen
+        lazy no empieza a descargarse hasta que abres, y la cortina cuenta con que ya esté ahí.
+        inferSize: la URL es remota (Supabase Storage) y Astro no sabe cuánto mide.
+      -->
       {
         image ? (
           <Image
             src={image}
             alt={`Captura de ${name}`}
+            inferSize
             widths={[620, 1240]}
             sizes="(max-width: 660px) 100vw, 620px"
+            loading="eager"
             data-modal-photo
           />
         ) : (
