@@ -3,7 +3,7 @@ import { SITE } from '@/config/site';
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import { getPost } from '@/lib/content';
 
-// Se renderiza en cada petición: así un artículo publicado desde /admin se ve al recargar,
+// Se renderiza en cada petición: así un post publicado desde /admin se ve al recargar,
 // sin reconstruir el sitio. Ya no hay getStaticPaths — la ruta es dinámica.
 export const prerender = false;
 

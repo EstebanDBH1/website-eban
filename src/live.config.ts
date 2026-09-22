@@ -180,6 +180,6 @@ const projectsLoader: LiveLoader<ReturnType<typeof projectData>, { id: string }>
 };
 
 export const collections = {
-  articulos: defineLiveCollection({ loader: postsLoader }),
+  posts: defineLiveCollection({ loader: postsLoader }),
   proyectos: defineLiveCollection({ loader: projectsLoader }),
 };

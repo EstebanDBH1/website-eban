@@ -9,7 +9,7 @@ const posts = await getPosts();
   {
     posts.map((post) => (
       <li>
-        <a href={`/articulos/${post.id}/`} data-split>
+        <a href={`/posts/${post.id}/`} data-split>
           {post.data.title}
         </a>
         {SITE.showYears && <span data-split>{post.data.year}</span>}

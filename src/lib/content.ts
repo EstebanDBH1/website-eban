@@ -12,7 +12,7 @@ import { getLiveCollection, getLiveEntry } from 'astro:content';
  */
 
 export async function getPosts() {
-  const { entries, error } = await getLiveCollection('articulos');
+  const { entries, error } = await getLiveCollection('posts');
   if (error) throw error;
   return (entries ?? []).sort((a, b) => a.data.order - b.data.order);
 }
@@ -25,7 +25,7 @@ export async function getProjects() {
 
 /** Devuelve null si no existe, para que la página pueda responder 404. */
 export async function getPost(slug: string) {
-  const { entry, error } = await getLiveEntry('articulos', slug);
+  const { entry, error } = await getLiveEntry('posts', slug);
 
   // getLiveEntry señala "no existe" con un error, no con entry vacío. Se distingue por el
   // nombre porque astro:content no expone la clase; un fallo real sí debe propagarse.

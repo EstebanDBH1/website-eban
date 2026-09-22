@@ -4,7 +4,7 @@ import { createRichEditor, type RichEditor } from '@/scripts/editor';
 
 /**
  * Panel de administración (/admin): entrar, crear, editar, ordenar y borrar
- * proyectos y artículos, con editor de texto enriquecido y subida de imágenes.
+ * proyectos y posts, con editor de texto enriquecido y subida de imágenes.
  *
  * Esta página no monta el <ClientRouter />, así que aquí sí arrancamos al cargar el módulo
  * y no dentro de 'astro:page-load': no hay navegación de cliente que reemplace el DOM.
@@ -32,7 +32,7 @@ interface Resource {
   titleField: string;
   /** Segunda línea de cada fila de la lista. */
   subtitleField: string;
-  /** Mostrar el tiempo de lectura bajo el editor (solo tiene sentido en artículos). */
+  /** Mostrar el tiempo de lectura bajo el editor (solo tiene sentido en posts). */
   showReadingTime: boolean;
   fields: Field[];
 }
@@ -86,7 +86,7 @@ const RESOURCES: Record<'projects' | 'posts', Resource> = {
   },
   posts: {
     table: 'posts',
-    singular: 'artículo',
+    singular: 'post',
     titleField: 'title',
     subtitleField: 'excerpt',
     showReadingTime: true,
@@ -103,7 +103,7 @@ const RESOURCES: Record<'projects' | 'posts', Resource> = {
         label: 'Slug',
         type: 'text',
         required: true,
-        hint: `La URL: /articulos/<slug>/ · ${SLUG_HINT}`,
+        hint: `La URL: /posts/<slug>/ · ${SLUG_HINT}`,
       },
       {
         name: 'excerpt',
@@ -120,7 +120,7 @@ const RESOURCES: Record<'projects' | 'posts', Resource> = {
         type: 'image',
         hint: 'Se ve bajo el título, antes del texto. Máx. 5 MB. Opcional.',
       },
-      { name: 'body', label: 'Artículo', type: 'richtext' },
+      { name: 'body', label: 'Post', type: 'richtext' },
       { name: 'sort_order', label: 'Orden', type: 'number', hint: 'Menor = más arriba.' },
     ],
   },

@@ -1,9 +1,9 @@
 /**
  * Tiempo de lectura a partir del texto, no de un campo que haya que mantener a mano.
  *
- * Lo usan los dos lados: el build (src/lib/supabase-loader.ts), que es la fuente de verdad,
- * y el panel, que lo muestra en vivo mientras escribes. Al derivarse del cuerpo nunca se
- * queda desfasado: si editas el artículo, el tiempo se recalcula solo.
+ * Lo usan los dos lados: la colección viva (src/live.config.ts), que es la fuente de verdad,
+ * y el panel, que lo muestra mientras escribes. Al derivarse del cuerpo nunca se queda
+ * desfasado: si editas el post, el tiempo se recalcula solo.
  */
 
 /** Palabras por minuto de un lector medio en español. */

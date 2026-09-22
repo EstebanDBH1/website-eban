@@ -26,7 +26,7 @@ All of them need `.env` and a reachable Supabase project.
 | Route | Mode | Why |
 |---|---|---|
 | `/` | `prerender = false` | reads posts and projects live |
-| `/articulos/[slug]` | `prerender = false` | reads the article live; no `getStaticPaths` |
+| `/posts/[slug]` | `prerender = false` | reads the post live; no `getStaticPaths` |
 | `/404` | `prerender = false` | so it can return a real 404 status, not a 200 |
 | `/admin` | `prerender = true` | pure client-side; all its work happens in the browser |
 
@@ -51,7 +51,7 @@ If a deploy ever fails with *"Secrets scanning found secrets in build output"*, 
 
 Two tables in the Supabase project `eban-db` (ref `gsfnqihfthshajlenrhd`, org `esteban-db`):
 
-- **`public.posts`** — `slug` (the URL, `/articulos/<slug>/`), `title`, `excerpt`, `year`, `body` (Markdown), `sort_order`, `draft`.
+- **`public.posts`** — `slug` (the URL, `/posts/<slug>/`), `title`, `excerpt`, `year`, `image_url`, `body` (Markdown), `sort_order`, `draft`.
 - **`public.projects`** — `slug`, `name`, `year`, `description`, `stack`, `status`, `role`, `href`, `image_url`, `body` (Markdown), `sort_order`, `draft`.
 
 Both carry `id`, `created_at` and `updated_at` (kept fresh by the `set_updated_at` trigger).
@@ -62,11 +62,11 @@ Both carry `id`, `created_at` and `updated_at` (kept fresh by the `set_updated_a
 
 **There is no `reading_time` column.** It is derived from the body by `src/lib/reading-time.ts` (200 wpm, ignoring code blocks, image syntax and link URLs, minimum 1 min), so it can never drift from the text.
 
-Project screenshots go to the public **`project-images`** Storage bucket (5 MB cap, image MIME types only); `image_url` holds the public URL.
+Both tables have an `image_url`: on `projects` it is the screenshot in the modal, on `posts` the cover shown under the title (distinct from images pasted inside the body, which live in the Markdown). Those files go to the public **`project-images`** Storage bucket (5 MB cap, image MIME types only); `image_url` holds the public URL.
 
 ### How it reaches the pages
 
-`src/live.config.ts` defines two **live collections** (`defineLiveCollection`). They are queried per request, not at build time. Pages never call them directly — everything goes through `src/lib/content.ts` (`getPosts`, `getProjects`, `getPost`) so ordering and error handling stay in one place.
+The collections are named `posts` and `proyectos`. `src/live.config.ts` defines them as **live collections** (`defineLiveCollection`). They are queried per request, not at build time. Pages never call them directly — everything goes through `src/lib/content.ts` (`getPosts`, `getProjects`, `getPost`) so ordering and error handling stay in one place.
 
 Two things worth knowing before editing that file:
 

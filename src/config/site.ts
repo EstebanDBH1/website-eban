@@ -8,7 +8,7 @@ export const SITE = {
   defaultTheme: 'dark' as Theme,
   /** Color de acento: enlaces en hover y selección. Opciones del diseño: #c9a06a, #9cb3a0, #c98f7a, #8fa3c9 */
   accent: '#c9a06a',
-  /** Muestra el año junto a cada artículo en la portada. */
+  /** Muestra el año junto a cada post en la portada. */
   showYears: true,
   footer: 'Escribiendo desde Colombia. Siempre abierto a hablar de modelos, de tipografía o de café.',
 };
