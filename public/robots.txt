@@ -1,0 +1,6 @@
+# El panel es privado: no tiene por qué salir en los buscadores.
+User-agent: *
+Disallow: /admin
+Allow: /
+
+Sitemap: https://eban-page.netlify.app/sitemap.xml

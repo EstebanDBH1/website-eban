@@ -13,9 +13,25 @@ const post = slug ? await getPost(slug) : null;
 if (!post) return Astro.rewrite('/404');
 
 const { title, excerpt, year, readingTime, image } = post.data;
+
+/*
+  Datos estructurados: lo que le dice a Google que esto es un artículo con autor y no una
+  página cualquiera. Es lo que habilita los resultados enriquecidos en la búsqueda.
+*/
+const schema = {
+  '@context': 'https://schema.org',
+  '@type': 'BlogPosting',
+  headline: title,
+  description: excerpt,
+  author: { '@type': 'Person', name: SITE.name },
+  publisher: { '@type': 'Person', name: SITE.name },
+  inLanguage: SITE.lang,
+  url: new URL(Astro.url.pathname, Astro.url.origin).href,
+  image: image ?? new URL(`/og/${post.id}.png`, Astro.url.origin).href,
+};
 ---
 
-<BaseLayout title={title} description={excerpt}>
+<BaseLayout title={title} description={excerpt} type="article" image={image} ogSlug={post.id}>
   <article>
     <a href="/" class="back" data-reveal>← {SITE.name}</a>
     <p class="meta" data-reveal>{year} · {readingTime} de lectura</p>
@@ -38,6 +54,8 @@ const { title, excerpt, year, readingTime, image } = post.data;
       <span>{SITE.name}</span>
     </nav>
   </article>
+
+  <script type="application/ld+json" is:inline set:html={JSON.stringify(schema)} />
 </BaseLayout>
 
 <style>

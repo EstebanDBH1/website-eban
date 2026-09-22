@@ -6,10 +6,24 @@ import '@/styles/global.css';
 interface Props {
   title?: string;
   description?: string;
+  /** 'article' en los posts; el resto de páginas son 'website'. */
+  type?: 'website' | 'article';
+  /** Portada del post. Si falta, se genera una tarjeta con el título (ver src/lib/og.ts). */
+  image?: string;
+  /** Slug del post, para pedir su tarjeta generada. */
+  ogSlug?: string;
 }
 
-const { title, description = SITE.description } = Astro.props;
+const { title, description = SITE.description, type = 'website', image, ogSlug } = Astro.props;
 const pageTitle = title ? `${title} · ${SITE.name}` : SITE.name;
+
+/*
+  Absolutas y no relativas: las redes sociales no resuelven rutas relativas al previsualizar
+  un enlace. Astro.url ya trae el origen real, así que esto funciona igual en producción,
+  en los previews de rama y en local.
+*/
+const canonical = new URL(Astro.url.pathname, Astro.url.origin).href;
+const ogImage = image ?? new URL(`/og/${ogSlug ?? 'home'}.png`, Astro.url.origin).href;
 ---
 
 <!doctype html>
@@ -24,7 +38,27 @@ const pageTitle = title ? `${title} · ${SITE.name}` : SITE.name;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{pageTitle}</title>
     <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
+
+    <!-- Tarjeta al compartir: Open Graph la leen WhatsApp, LinkedIn, Slack, Telegram… -->
+    <meta property="og:type" content={type} />
+    <meta property="og:title" content={title ?? SITE.name} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={title ?? SITE.name} />
+    <meta property="og:site_name" content={SITE.name} />
+    <meta property="og:locale" content="es_ES" />
+
+    <!-- X usa las suyas; summary_large_image es la tarjeta ancha con imagen arriba. -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title ?? SITE.name} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
     <link
