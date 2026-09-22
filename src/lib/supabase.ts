@@ -12,8 +12,13 @@ export const SUPABASE_URL = import.meta.env.PUBLIC_SUPABASE_URL;
 export const SUPABASE_ANON_KEY = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  // El fallo aparece en `astro sync`, antes de generar nada, porque content.config.ts
+  // carga el loader y el loader carga este módulo. El mensaje cubre los dos entornos:
+  // fallar solo con "copia el .env" despista cuando quien falla es el build del hosting.
   throw new Error(
-    'Faltan PUBLIC_SUPABASE_URL y PUBLIC_SUPABASE_ANON_KEY. Copia .env.example a .env.',
+    'Faltan PUBLIC_SUPABASE_URL y PUBLIC_SUPABASE_ANON_KEY.\n' +
+      '· En local: copia .env.example a .env y rellénalas.\n' +
+      '· En Netlify: Site configuration → Environment variables, con el scope «Builds» marcado.',
   );
 }
 

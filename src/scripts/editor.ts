@@ -13,6 +13,11 @@ import { StarterKit } from '@tiptap/starter-kit';
  * Las imágenes se pegan, se arrastran o se eligen con el botón. En los tres casos aparecen
  * al instante con una URL local (blob:) y la subida ocurre por detrás; cuando termina, se
  * cambia el src por el de Storage. Así no te quedas mirando una barra de progreso.
+ *
+ * ORDEN IMPORTANTE: la barra de herramientas se construye antes que el Editor. Al abrir una
+ * entrada existente, el setContent() inicial dispara onUpdate → paint(), y si las referencias
+ * que paint() necesita todavía no existen, el ReferenceError revienta dentro de TipTap y el
+ * diálogo se queda sin abrir. Por eso `editor` es un let inicializado a null y no un const.
  */
 
 export interface RichEditor {
@@ -27,7 +32,7 @@ interface Options {
   initial: string;
   /** Sube el archivo y devuelve su URL pública. */
   upload: (file: File) => Promise<string>;
-  /** Se llama en cada tecla con el Markdown actual (para el contador y el autoguardado). */
+  /** Se llama en cada cambio con el Markdown actual (para el contador). */
   onUpdate: (markdown: string) => void;
   /** Mensajes para la barra de estado del panel. */
   onStatus: (message: string, kind?: 'info' | 'error' | 'ok') => void;
@@ -79,7 +84,7 @@ const TOOLS: Tool[] = [
     title: 'Enlace',
     divider: true,
     run: (e) => {
-      const previous = e.getAttributes('link').href ?? '';
+      const previous = (e.getAttributes('link').href as string | undefined) ?? '';
       const url = window.prompt('URL del enlace (vacío para quitarlo)', previous);
       if (url === null) return;
       if (!url) return e.chain().focus().unsetLink().run();
@@ -127,22 +132,24 @@ function swapImageSrc(editor: Editor, from: string, to: string) {
   });
 
   if (found) view.dispatch(transaction);
-  return found;
 }
 
 /** Quita la imagen de vista previa cuando la subida falla, para no dejar un roto en el texto. */
 function removeImage(editor: Editor, src: string) {
   const { state, view } = editor;
-  const transaction = state.tr;
-  let offset = 0;
+  const positions: Array<{ from: number; to: number }> = [];
 
   state.doc.descendants((node, position) => {
     if (node.type.name === 'image' && node.attrs.src === src) {
-      transaction.delete(position - offset, position - offset + node.nodeSize);
-      offset += node.nodeSize;
+      positions.push({ from: position, to: position + node.nodeSize });
     }
   });
 
+  if (!positions.length) return;
+
+  const transaction = state.tr;
+  // De atrás hacia delante: borrar por el final no desplaza las posiciones anteriores.
+  for (const { from, to } of positions.reverse()) transaction.delete(from, to);
   view.dispatch(transaction);
 }
 
@@ -162,7 +169,80 @@ export function createRichEditor({ mount, initial, upload, onUpdate, onStatus }:
 
   mount.append(toolbar, surface, picker);
 
-  const editor = new Editor({
+  // Inicializado a null y no declarado como const: paint() puede ejecutarse durante la
+  // construcción del Editor, y un const en zona muerta temporal lanzaría al leerlo.
+  let editor: Editor | null = null;
+
+  function addDivider() {
+    const divider = document.createElement('span');
+    divider.className = 'divider';
+    toolbar.append(divider);
+  }
+
+  const buttons = TOOLS.map((tool) => {
+    if (tool.divider) addDivider();
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = tool.label;
+    button.title = tool.title;
+    button.addEventListener('click', () => {
+      if (editor) tool.run(editor);
+    });
+    toolbar.append(button);
+    return { button, tool };
+  });
+
+  addDivider();
+  const imageButton = document.createElement('button');
+  imageButton.type = 'button';
+  imageButton.textContent = '🖼';
+  imageButton.title = 'Insertar imagen (o arrástrala / pégala)';
+  imageButton.addEventListener('click', () => picker.click());
+  toolbar.append(imageButton);
+
+  /** Marca en la barra lo que está activo donde tienes el cursor. */
+  function paint() {
+    if (!editor) return;
+    for (const { button, tool } of buttons) {
+      button.classList.toggle('is-active', Boolean(tool.isActive?.(editor)));
+    }
+  }
+
+  function imageFrom(source: DataTransfer | null) {
+    const files = Array.from(source?.files ?? []);
+    return files.find((file) => file.type.startsWith('image/')) ?? null;
+  }
+
+  /** Inserta ya, sube después: la vista previa es inmediata. */
+  async function insert(file: File) {
+    if (!editor) return;
+    const instance = editor;
+
+    const preview = URL.createObjectURL(file);
+    instance.chain().focus().setImage({ src: preview, alt: '' }).run();
+    onStatus('Subiendo la imagen…');
+
+    try {
+      const url = await upload(file);
+      swapImageSrc(instance, preview, url);
+      onStatus('Imagen lista.', 'ok');
+      onUpdate(instance.getMarkdown());
+    } catch (error) {
+      removeImage(instance, preview);
+      onStatus(error instanceof Error ? error.message : 'No se pudo subir la imagen.', 'error');
+    } finally {
+      URL.revokeObjectURL(preview);
+    }
+  }
+
+  picker.addEventListener('change', () => {
+    const file = picker.files?.[0];
+    picker.value = '';
+    if (file) void insert(file);
+  });
+
+  editor = new Editor({
     element: surface,
     extensions: [
       StarterKit.configure({ link: { openOnClick: false } }),
@@ -193,76 +273,11 @@ export function createRichEditor({ mount, initial, upload, onUpdate, onStatus }:
     onSelectionUpdate: paint,
   });
 
-  editor.commands.setContent(initial ?? '', { contentType: 'markdown' });
-
-  function imageFrom(source: DataTransfer | null) {
-    const files = Array.from(source?.files ?? []);
-    return files.find((file) => file.type.startsWith('image/')) ?? null;
-  }
-
-  /** Inserta ya, sube después: la vista previa es inmediata. */
-  async function insert(file: File) {
-    const preview = URL.createObjectURL(file);
-    editor.chain().focus().setImage({ src: preview, alt: '' }).run();
-    onStatus('Subiendo la imagen…');
-
-    try {
-      const url = await upload(file);
-      swapImageSrc(editor, preview, url);
-      onStatus('Imagen lista.', 'ok');
-      onUpdate(editor.getMarkdown());
-    } catch (error) {
-      removeImage(editor, preview);
-      onStatus(error instanceof Error ? error.message : 'No se pudo subir la imagen.', 'error');
-    } finally {
-      URL.revokeObjectURL(preview);
-    }
-  }
-
-  picker.addEventListener('change', () => {
-    const file = picker.files?.[0];
-    picker.value = '';
-    if (file) void insert(file);
-  });
-
-  function addDivider() {
-    const divider = document.createElement('span');
-    divider.className = 'divider';
-    toolbar.append(divider);
-  }
-
-  const buttons = TOOLS.map((tool) => {
-    if (tool.divider) addDivider();
-
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = tool.label;
-    button.title = tool.title;
-    button.addEventListener('click', () => tool.run(editor));
-    toolbar.append(button);
-    return { button, tool };
-  });
-
-  // La imagen va al final y abre el selector de archivos.
-  addDivider();
-  const imageButton = document.createElement('button');
-  imageButton.type = 'button';
-  imageButton.textContent = '🖼';
-  imageButton.title = 'Insertar imagen (o arrástrala / pégala)';
-  imageButton.addEventListener('click', () => picker.click());
-  toolbar.append(imageButton);
-
-  /** Marca en la barra lo que está activo donde tienes el cursor. */
-  function paint() {
-    for (const { button, tool } of buttons) {
-      button.classList.toggle('is-active', Boolean(tool.isActive?.(editor)));
-    }
-  }
-
+  if (initial) editor.commands.setContent(initial, { contentType: 'markdown' });
   paint();
 
   return {
-    getMarkdown: () => editor.getMarkdown(),
-    destroy: () => editor.destroy(),
+    getMarkdown: () => editor?.getMarkdown() ?? '',
+    destroy: () => editor?.destroy(),
   };
 }

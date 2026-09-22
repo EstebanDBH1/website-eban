@@ -14,7 +14,7 @@ import { createRichEditor, type RichEditor } from '@/scripts/editor';
  * sirve para dar un mensaje claro en vez de fallos silenciosos.
  */
 
-type FieldType = 'text' | 'number' | 'textarea' | 'checkbox' | 'image' | 'richtext';
+type FieldType = 'text' | 'number' | 'textarea' | 'checkbox' | 'image' | 'richtext' | 'publish';
 
 interface Field {
   name: string;
@@ -47,6 +47,12 @@ const RESOURCES: Record<'projects' | 'posts', Resource> = {
     subtitleField: 'description',
     showReadingTime: false,
     fields: [
+      {
+        name: 'draft',
+        label: 'Estado',
+        type: 'publish',
+        hint: 'Un borrador se guarda pero no aparece en el sitio.',
+      },
       { name: 'name', label: 'Nombre', type: 'text', required: true },
       { name: 'slug', label: 'Slug', type: 'text', required: true, hint: SLUG_HINT },
       {
@@ -76,7 +82,6 @@ const RESOURCES: Record<'projects' | 'posts', Resource> = {
       { name: 'image_url', label: 'Captura', type: 'image', hint: 'Máx. 5 MB.' },
       { name: 'body', label: 'Texto del modal', type: 'richtext' },
       { name: 'sort_order', label: 'Orden', type: 'number', hint: 'Menor = más arriba.' },
-      { name: 'draft', label: 'Borrador (no se publica)', type: 'checkbox' },
     ],
   },
   posts: {
@@ -86,6 +91,12 @@ const RESOURCES: Record<'projects' | 'posts', Resource> = {
     subtitleField: 'excerpt',
     showReadingTime: true,
     fields: [
+      {
+        name: 'draft',
+        label: 'Estado',
+        type: 'publish',
+        hint: 'Un borrador se guarda pero no aparece en el sitio.',
+      },
       { name: 'title', label: 'Título', type: 'text', required: true },
       {
         name: 'slug',
@@ -105,7 +116,6 @@ const RESOURCES: Record<'projects' | 'posts', Resource> = {
       { name: 'year', label: 'Año', type: 'number', required: true },
       { name: 'body', label: 'Artículo', type: 'richtext' },
       { name: 'sort_order', label: 'Orden', type: 'number', hint: 'Menor = más arriba.' },
-      { name: 'draft', label: 'Borrador (no se publica)', type: 'checkbox' },
     ],
   },
 };
@@ -245,7 +255,7 @@ function render() {
     item.querySelector('.name')!.textContent = String(field(row, current.titleField) ?? '');
     item.querySelector('.sub')!.textContent = String(field(row, current.subtitleField) ?? '');
 
-    item.querySelector('[data-edit]')!.addEventListener('click', () => openEditor(row));
+    item.querySelector('[data-edit]')!.addEventListener('click', () => openEditorSafely(row));
     item.querySelector('[data-delete]')!.addEventListener('click', () => remove(row));
     item.querySelectorAll<HTMLButtonElement>('[data-move]').forEach((button) => {
       button.addEventListener('click', () => move(index, Number(button.dataset.move)));
@@ -299,6 +309,41 @@ function buildField(spec: Field, value: unknown) {
   const label = document.createElement('label');
   label.htmlFor = id;
   label.textContent = spec.label;
+
+  // Publicado / Borrador: dos radios de verdad (accesibles) pintados como un selector.
+  // Va arriba del formulario a propósito — es la decisión que más se olvida.
+  if (spec.type === 'publish') {
+    const group = document.createElement('div');
+    group.className = 'segmented';
+
+    for (const option of [
+      { id: 'f-draft-live', value: 'false', text: 'Publicado' },
+      { id: 'f-draft-draft', value: 'true', text: 'Borrador' },
+    ]) {
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'publish-state';
+      radio.id = option.id;
+      radio.value = option.value;
+      radio.checked = String(Boolean(value)) === option.value;
+
+      const caption = document.createElement('label');
+      caption.htmlFor = option.id;
+      caption.textContent = option.text;
+
+      group.append(radio, caption);
+    }
+
+    wrapper.append(label, group);
+
+    if (spec.hint) {
+      const hint = document.createElement('p');
+      hint.className = 'hint';
+      hint.textContent = spec.hint;
+      wrapper.append(hint);
+    }
+    return wrapper;
+  }
 
   // El editor rico no es un control de formulario: guarda su Markdown en un campo oculto
   // y se monta encima (ver openEditor).
@@ -483,7 +528,7 @@ function initialValue(name: string) {
   if (name === 'year') return new Date().getFullYear();
   if (name === 'sort_order') return rows.length + 1;
   if (name === 'href') return '#';
-  if (name === 'draft') return true;
+  if (name === 'draft') return false; // escribir es publicar; el borrador se marca aparte
   return '';
 }
 
@@ -548,6 +593,11 @@ async function save(event: SubmitEvent) {
 
   const payload: Record<string, unknown> = {};
   for (const spec of current.fields) {
+    if (spec.type === 'publish') {
+      payload[spec.name] =
+        document.querySelector<HTMLInputElement>('input[name="publish-state"]:checked')?.value === 'true';
+      continue;
+    }
     const input = $<HTMLInputElement>(`#f-${spec.name}`);
     if (spec.type === 'richtext') payload[spec.name] = body?.getMarkdown() ?? input.value;
     else if (spec.type === 'checkbox') payload[spec.name] = input.checked;
@@ -565,7 +615,12 @@ async function save(event: SubmitEvent) {
   if (error) return setStatus(explain(error), 'error');
 
   closeEditor();
-  setStatus(payload.draft ? 'Guardado como borrador.' : 'Guardado y publicado.', 'ok');
+  setStatus(
+    payload.draft
+      ? 'Guardado como borrador — no aparecerá en el sitio.'
+      : 'Guardado y publicado. Falta reconstruir el sitio para verlo en la web.',
+    'ok',
+  );
   await load();
 }
 
@@ -604,7 +659,23 @@ document.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((tab) => {
   });
 });
 
-$('#new').addEventListener('click', () => openEditor(null));
+$('#new').addEventListener('click', () => openEditorSafely(null));
+
+/**
+ * Si abrir el formulario falla, el diálogo se queda cerrado y parece que el botón «no hace
+ * nada». Mejor decirlo: cualquier error al montarlo sale en la barra de estado.
+ */
+function openEditorSafely(row: Row | null) {
+  try {
+    openEditor(row);
+  } catch (error) {
+    setStatus(
+      `No se pudo abrir el formulario: ${error instanceof Error ? error.message : String(error)}`,
+      'error',
+    );
+    editor.close();
+  }
+}
 editorForm.addEventListener('submit', save);
 document
   .querySelectorAll('[data-editor-close]')
