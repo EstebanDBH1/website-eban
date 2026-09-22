@@ -51,6 +51,7 @@ interface PostRow {
   title: string;
   excerpt: string;
   year: number;
+  image_url: string | null;
   body: string | null;
   sort_order: number;
   updated_at: string;
@@ -80,6 +81,7 @@ const postData = (row: PostRow) => ({
   excerpt: row.excerpt,
   year: row.year,
   readingTime: readingTime(row.body ?? ''),
+  image: row.image_url ?? undefined,
   order: row.sort_order,
 });
 

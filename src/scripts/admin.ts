@@ -114,6 +114,12 @@ const RESOURCES: Record<'projects' | 'posts', Resource> = {
         hint: 'Se usa en la portada y como meta description.',
       },
       { name: 'year', label: 'Año', type: 'number', required: true },
+      {
+        name: 'image_url',
+        label: 'Portada',
+        type: 'image',
+        hint: 'Se ve bajo el título, antes del texto. Máx. 5 MB. Opcional.',
+      },
       { name: 'body', label: 'Artículo', type: 'richtext' },
       { name: 'sort_order', label: 'Orden', type: 'number', hint: 'Menor = más arriba.' },
     ],

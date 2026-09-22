@@ -12,7 +12,7 @@ const post = slug ? await getPost(slug) : null;
 
 if (!post) return Astro.rewrite('/404');
 
-const { title, excerpt, year, readingTime } = post.data;
+const { title, excerpt, year, readingTime, image } = post.data;
 ---
 
 <BaseLayout title={title} description={excerpt}>
@@ -21,6 +21,14 @@ const { title, excerpt, year, readingTime } = post.data;
     <p class="meta" data-reveal>{year} · {readingTime} de lectura</p>
     <h1 data-reveal>{title}</h1>
     <p class="excerpt" data-reveal>{excerpt}</p>
+
+    {
+      image && (
+        <figure class="cover" data-reveal>
+          <img src={image} alt={`Portada de ${title}`} loading="eager" />
+        </figure>
+      )
+    }
 
     <!-- El HTML ya viene convertido desde la colección viva (src/live.config.ts). -->
     <div class="prose" data-reveal set:html={post.rendered?.html} />
@@ -66,6 +74,24 @@ const { title, excerpt, year, readingTime } = post.data;
     color: var(--muted);
     font-style: italic;
     text-wrap: pretty;
+  }
+
+  /*
+    La proporción se fija aquí y no se deja al archivo: la imagen es remota y no sabemos
+    cuánto mide hasta que llega, así que sin esto la página daría un salto al cargarla.
+  */
+  .cover {
+    margin: 0 0 34px;
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--tint);
+  }
+
+  .cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 
   .prose {
