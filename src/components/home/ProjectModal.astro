@@ -1,14 +1,12 @@
 ---
-import { Image } from 'astro:assets';
-import { render, type CollectionEntry } from 'astro:content';
+import type { Project } from '@/lib/content';
 
 interface Props {
-  project: CollectionEntry<'proyectos'>;
+  project: Project;
 }
 
 const { project } = Astro.props;
 const { name, year, stack, status, role, href, image } = project.data;
-const { Content } = await render(project);
 const id = `proyecto-${project.id}`;
 ---
 
@@ -18,19 +16,14 @@ const id = `proyecto-${project.id}`;
       <!--
         loading="eager" a propósito: dentro de un <dialog> cerrado (display: none) una imagen
         lazy no empieza a descargarse hasta que abres, y la cortina cuenta con que ya esté ahí.
-        inferSize: la URL es remota (Supabase Storage) y Astro no sabe cuánto mide.
+
+        <img> normal y no <Image> de astro:assets: la página se renderiza en cada petición y la
+        captura es remota, así que Astro tendría que descargarla cada vez solo para medirla.
+        El marco ya fija el 16/9, de modo que no hay salto de maquetación.
       -->
       {
         image ? (
-          <Image
-            src={image}
-            alt={`Captura de ${name}`}
-            inferSize
-            widths={[620, 1240]}
-            sizes="(max-width: 660px) 100vw, 620px"
-            loading="eager"
-            data-modal-photo
-          />
+          <img src={image} alt={`Captura de ${name}`} loading="eager" data-modal-photo />
         ) : (
           <span class="placeholder">Captura del proyecto</span>
         )
@@ -50,9 +43,7 @@ const id = `proyecto-${project.id}`;
     </div>
 
     <!-- data-split-group: el Markdown no se puede anotar, así que dividimos sus hijos. -->
-    <div class="body" data-split-group>
-      <Content />
-    </div>
+    <div class="body" data-split-group set:html={project.rendered?.html} />
 
     <dl data-split-group>
       <dt>Stack</dt>

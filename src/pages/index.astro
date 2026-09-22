@@ -7,6 +7,10 @@ import Footer from '@/components/layout/Footer.astro';
 import Header from '@/components/layout/Header.astro';
 import Section from '@/components/ui/Section.astro';
 import BaseLayout from '@/layouts/BaseLayout.astro';
+
+// Se renderiza en cada petición: lee Supabase en vivo, así lo que publicas desde /admin
+// aparece al recargar sin reconstruir el sitio.
+export const prerender = false;
 ---
 
 <BaseLayout>

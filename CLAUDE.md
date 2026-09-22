@@ -4,33 +4,46 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Personal website for Esteban Blanco (content in Spanish). Static Astro 7 site, no UI framework, no client-side routing. It was migrated from a Claude Design export, which is archived in `_diseno-original/` for visual reference only (not part of the build).
+Personal website for Esteban Blanco (content in Spanish). Astro 7, no UI framework, no client-side routing. It was migrated from a Claude Design export, which is archived in `_diseno-original/` for visual reference only (not part of the build).
 
-**Content lives in Supabase, not in the repo.** Esteban writes articles and uploads projects from the admin panel at `/admin`; the build pulls them in. See "Content" below.
+**Content lives in Supabase and is read on every request.** Esteban writes articles and uploads projects from the admin panel at `/admin`; what he saves shows up on the site as soon as the page is reloaded — no rebuild, no deploy.
 
-Deployed on **Netlify** from GitHub (`EstebanDBH1/website-eban`, branch `main`). No `netlify.toml` — Netlify auto-detects Astro (`npm run build` → `dist/`).
+Deployed on **Netlify** from GitHub (`EstebanDBH1/website-eban`, branch `main`). No `netlify.toml` — Netlify auto-detects Astro.
 
 ## Commands
 
 - `npm run dev`: dev server at http://localhost:4321
-- `npm run build`: static build to `dist/`
+- `npm run build`: build to `dist/` plus the Netlify SSR function
 - `npm run preview`: serve the build
 - `npm run check`: type-check `.astro`/TS files (`astro check`)
 
-There are no tests or linter.
+All of them need `.env` and a reachable Supabase project.
 
-`dev`, `build` and `check` all reach out to Supabase to sync content, so they need network and a live project.
+## Rendering model
+
+`output: 'static'` **with the Netlify adapter**, so pages are static by default and opt into on-demand rendering one by one:
+
+| Route | Mode | Why |
+|---|---|---|
+| `/` | `prerender = false` | reads posts and projects live |
+| `/articulos/[slug]` | `prerender = false` | reads the article live; no `getStaticPaths` |
+| `/404` | `prerender = false` | so it can return a real 404 status, not a 200 |
+| `/admin` | `prerender = true` | pure client-side; all its work happens in the browser |
+
+The trade this buys and costs: publishing is instant, but **the site now depends on Supabase being up**. `src/lib/content.ts` throws when a query fails, on purpose — an error page is better than a blank homepage that looks like nothing was ever written.
 
 ## Environment
 
-`.env` (gitignored, template in `.env.example`) holds:
+`.env` (gitignored, template in `.env.example`):
 
 - `PUBLIC_SUPABASE_URL`
 - `PUBLIC_SUPABASE_ANON_KEY`
 
-Both must also be set in **Netlify → Site settings → Environment variables**, or the deploy build fails.
+Both must also be set in **Netlify → Site configuration → Environment variables**, with the **Builds** scope enabled. Without them the build dies in `astro sync`, before generating anything, because `src/live.config.ts` imports the client.
 
-The anon key is public by design — it ships in the `/admin` bundle. It protects nothing on its own; **RLS is what guards the data**. Never put the `service_role` key in this repo.
+The anon key is public by design — it ships in the `/admin` bundle. **RLS is what guards the data**, not the key. Never put the `service_role` key in this repo.
+
+If a deploy ever fails with *"Secrets scanning found secrets in build output"*, that is Netlify finding the anon key in the JS where it is supposed to be; add `SECRETS_SCAN_OMIT_KEYS=PUBLIC_SUPABASE_URL,PUBLIC_SUPABASE_ANON_KEY`.
 
 ## Content
 
@@ -38,62 +51,74 @@ The anon key is public by design — it ships in the `/admin` bundle. It protect
 
 Two tables in the Supabase project `eban-db` (ref `gsfnqihfthshajlenrhd`, org `esteban-db`):
 
-- **`public.posts`** — articles. `slug` (the URL, `/articulos/<slug>/`), `title`, `excerpt`, `year`, `reading_time`, `body` (Markdown), `sort_order`, `draft`.
-- **`public.projects`** — projects. `slug`, `name`, `year`, `description`, `stack`, `status`, `role`, `href`, `image_url`, `body` (Markdown), `sort_order`, `draft`.
+- **`public.posts`** — `slug` (the URL, `/articulos/<slug>/`), `title`, `excerpt`, `year`, `body` (Markdown), `sort_order`, `draft`.
+- **`public.projects`** — `slug`, `name`, `year`, `description`, `stack`, `status`, `role`, `href`, `image_url`, `body` (Markdown), `sort_order`, `draft`.
 
-Both carry `id`, `created_at` and `updated_at` (kept fresh by the `set_updated_at` trigger). Rows are **born as drafts** (`draft` defaults to `true`) so nothing half-written goes live. `sort_order` is named that way because `order` is a reserved word in Postgres.
+Both carry `id`, `created_at` and `updated_at` (kept fresh by the `set_updated_at` trigger).
 
-Project screenshots go to the public **`project-images`** Storage bucket (5 MB cap, image MIME types only); `image_url` is the resulting public URL.
+`draft` defaults to **`false`**: writing is publishing, and a draft is something you mark on purpose. It started out the other way around and that was wrong for a one-author site — new posts kept silently not appearing.
+
+`sort_order` is named that way because `order` is a reserved word in Postgres.
+
+**There is no `reading_time` column.** It is derived from the body by `src/lib/reading-time.ts` (200 wpm, ignoring code blocks, image syntax and link URLs, minimum 1 min), so it can never drift from the text.
+
+Project screenshots go to the public **`project-images`** Storage bucket (5 MB cap, image MIME types only); `image_url` holds the public URL.
 
 ### How it reaches the pages
 
-`src/lib/supabase-loader.ts` is a Content Layer loader — the source changed, but everything downstream did not. `getCollection`, `render()`, `<Content />` and `<Image />` behave exactly as they did when the content was Markdown files.
+`src/live.config.ts` defines two **live collections** (`defineLiveCollection`). They are queried per request, not at build time. Pages never call them directly — everything goes through `src/lib/content.ts` (`getPosts`, `getProjects`, `getPost`) so ordering and error handling stay in one place.
 
-- It renders `body` through Astro's own **`renderMarkdown()`** (from `LoaderContext`), so Markdown is processed with the same config the `.md` files used — including heading anchors.
-- It reads with the anon key, so **RLS filters drafts out before they ever reach the build**.
-- If Supabase can't be reached it **throws and breaks the build**, rather than quietly publishing an empty site. Free Supabase projects pause after a stretch of inactivity, so this is a real scenario — the error message says to go reactivate it.
-- `digest` is `updated_at`, which the trigger bumps on every edit.
+Two things worth knowing before editing that file:
 
-`src/content.config.ts` defines the collections (still named `articulos` and `proyectos`) and maps snake_case columns onto the field names the components already used — `reading_time` → `readingTime`, `sort_order` → `order`, `image_url` → `image`. **Keep that mapping** so components never need to know the column names.
+- **Markdown is rendered with `marked`, not Astro's pipeline.** A live loader gets no `renderMarkdown()`. A small `marked` renderer override adds `id` attributes to headings so the anchors Astro used to generate are preserved.
+- **`getLiveEntry` reports "not found" as an error**, not as an empty entry, and `astro:content` does not export the error class. `getPost` therefore checks `error.name === 'LiveEntryNotFoundError'` and returns `null`; anything else is re-thrown.
 
-Always read collections through `src/lib/content.ts` (`getPosts`, `getProjects`), not `getCollection` directly, so sorting and draft filtering stay consistent.
+Drafts never need filtering in code: the anon key plus RLS only ever returns `draft = false`.
 
-### Images are remote now
+### Images
 
-`image` is a Supabase Storage URL, not a local asset. `astro.config.mjs` allowlists the Supabase host under `image.domains` — **without it Astro refuses to optimize remote images**. `ProjectModal.astro` passes `inferSize` (Astro can't know a remote image's dimensions) and `loading="eager"` (inside a closed `<dialog>`, `display: none` means a lazy image doesn't start downloading until you open it — and the curtain animation assumes the photo is already there).
+`image` is a Supabase Storage URL. `ProjectModal.astro` uses a plain `<img>`, **not `<Image>` from `astro:assets`** — with per-request rendering, a remote image with `inferSize` would be downloaded on every visit just to measure it. The `.frame` wrapper fixes the 16/9 ratio so nothing shifts. To get optimization back, store width and height in the table at upload time and pass them explicitly.
 
-### Publishing is not instant
-
-The site is a static build: a row saved in the panel appears on the web only after a rebuild. **There is no deploy hook yet** — for now a publish means triggering a Netlify build by hand. The intended fix is a Supabase Database Webhook on `posts`/`projects` calling a Netlify build hook.
+`loading="eager"` is deliberate: inside a closed `<dialog>` (`display: none`) a lazy image does not start downloading until you open it, and the curtain animation assumes the photo is already there.
 
 ## Admin panel (`/admin`)
 
-`src/pages/admin.astro` (markup + styles) and `src/scripts/admin.ts` (all the logic). Log in, create/edit/delete articles and projects, upload screenshots, reorder, toggle draft.
+`src/pages/admin.astro` (markup + styles), `src/scripts/admin.ts` (logic), `src/scripts/editor.ts` (rich text). Log in, create/edit/delete articles and projects, upload screenshots, reorder, publish or keep as draft.
 
-Three things about it are deliberate and easy to break:
+Things that are deliberate and easy to break:
 
-- **It does not use `BaseLayout`.** It mounts its own `<html>`: no `<ClientRouter />`, no GSAP, no reveals. It is a tool, not a page you read. It also carries `noindex`.
-- **Its `<style>` is `is:global`.** Astro scopes CSS by stamping `data-astro-cid-*` on elements in the template, and the panel builds most of its DOM in JavaScript — scoped rules would never match those nodes.
-- **`admin.ts` initializes at module top level**, which is the opposite of the rule below. That rule exists because `<ClientRouter />` swaps the DOM on navigation; this page has no router, so there is nothing to re-bind.
+- **It does not use `BaseLayout`.** It mounts its own `<html>`: no `<ClientRouter />`, no GSAP, no reveals. It also carries `noindex`.
+- **Its `<style>` is `is:global`.** Astro scopes CSS by stamping `data-astro-cid-*` on template elements, and the panel builds most of its DOM in JavaScript — scoped rules would never match those nodes.
+- **`admin.ts` initializes at module top level**, the opposite of the rule below. That rule exists because `<ClientRouter />` swaps the DOM on navigation; this page has no router.
+- **There is no sign-up.** One owner, whose user is created from the Supabase dashboard. Public sign-up should also be off in Supabase Auth — hiding the button does not close the endpoint.
 
-The form fields are data, not markup: `RESOURCES` describes each table's fields (`text`, `number`, `textarea`, `checkbox`, `image`) and one renderer builds both forms. Add a column → add a descriptor.
+Form fields are data, not markup: `RESOURCES` describes each table's fields (`text`, `number`, `textarea`, `checkbox`, `image`, `richtext`, `publish`) and one renderer builds both forms. The `publish` type is the Publicado/Borrador selector and sits first, because it is the decision people forget.
 
-Reordering swaps `sort_order` with the neighbour (two updates) instead of renumbering the list. Deleting a project also deletes its screenshot from the bucket. Postgres errors are translated into plain Spanish by `explain()` before they reach the status bar.
+Reordering swaps `sort_order` with the neighbour (two updates) rather than renumbering. Deleting a project also deletes its screenshot. Postgres errors are translated into plain Spanish by `explain()`.
+
+### Rich text editor
+
+TipTap with the official `@tiptap/markdown` extension. You edit WYSIWYG but **Markdown is what gets stored**, which is what keeps the rest of the pipeline unchanged.
+
+- **The toolbar is built before the `Editor` is constructed, and `editor` is a `let` initialized to `null`.** Opening an existing entry runs `setContent()`, which fires `onUpdate` → `paint()`; if what `paint()` reads does not exist yet, the `ReferenceError` is swallowed inside TipTap and the dialog silently never opens. This exact bug shipped once — creating worked, editing did nothing.
+- Images are inserted immediately with a local `blob:` URL and uploaded in the background; the `src` is swapped when the upload lands, and the node is removed if it fails. Same idea in the project screenshot dropzone.
+- The toolbar offers H2 and H3, not H1: the article title is already the page's `<h1>`.
+- Images inside an article body are plain `<img>` — they do not go through `astro:assets`. Upload them already sized and in webp.
 
 ## Security model
 
-Editing rights come from **`public.admin_emails`**, a table with no RLS policies at all — only `service_role` (i.e. the Supabase dashboard) can change it. The `public.is_admin()` function (`security definer`) checks the caller's JWT email against it.
+Editing rights come from **`public.admin_emails`**, a table with no RLS policies at all — only `service_role` (the Supabase dashboard) can change it. `public.is_admin()` (`security definer`) checks the caller's JWT email against it.
 
 Policies on both content tables:
 
-- `select` for `anon` and `authenticated`: `draft = false or public.is_admin()` — the public sees published rows, the admin also sees drafts in the panel.
+- `select` for `anon` and `authenticated`: `draft = false or public.is_admin()`.
 - `all` for `authenticated`: gated on `public.is_admin()`.
 
 Storage `project-images`: public read, writes gated on `is_admin()`.
 
-**Do not widen these back to plain `authenticated`.** Supabase allows public signup by default, so `to authenticated` alone would let anyone who registers edit the site. If Esteban needs a second editor, add their email to `admin_emails`.
+**Do not widen these back to plain `authenticated`.** Supabase allows public sign-up by default, so `to authenticated` alone would let anyone who registers edit the site. To add an editor, add their email to `admin_emails`.
 
-Verified against the live API: anonymous reads return only published rows, anonymous insert gets `401`, anonymous upload gets `403`, and `is_admin()` returns `false`.
+Verified against the live API: anonymous reads return only published rows, anonymous insert gets `401`, anonymous upload gets `403`, `is_admin()` returns `false`.
 
 ## Architecture
 
@@ -125,18 +150,15 @@ Verified against the live API: anonymous reads return only published rows, anony
 - **Client scripts must initialize inside `document.addEventListener('astro:page-load', …)`**, not at module top level. With the ClientRouter the DOM is swapped on navigation, but bundled scripts only execute once. (`/admin` is the exception — see above.)
 - **Shared keyframes** (`card-in/out`, `veil-in/out`) are global in `global.css`. Astro scopes component styles but not keyframe names, so keep them there.
 - **Components** are grouped by role: `components/layout` (page chrome), `components/home` (home sections), `components/ui` (generic pieces). The project modal's open/close logic (animated close on Esc, backdrop click and the ✕ button) is the `<script>` in `ProjectList.astro`.
-- Markdown bodies render through `<Content />`. Style their elements with `:global(p)` under a scoped wrapper class.
+- Markdown bodies arrive as HTML strings and are injected with `set:html`. Style them with `:global(...)` under a scoped wrapper class.
 - Import from `src` using the `@/` alias (defined in `tsconfig.json`).
 
 ## Known gaps
 
-Open items, roughly by weight:
-
-- No deploy hook: publishing from the panel needs a manual Netlify rebuild.
-- `src/content/` and `src/assets/proyectos/` still hold the old placeholder Markdown and image. Nothing reads them — they should be deleted.
+- `src/content/` and `src/assets/proyectos/` still hold the original placeholder Markdown and image. Nothing reads them — there is no `content.config.ts` any more. They should be deleted.
 - `SOCIAL_LINKS` in `src/config/site.ts` are all still `href: '#'`.
-- No `src/pages/404.astro`.
 - `astro.config.mjs` has no `site`, so there's no canonical URL and no sitemap.
 - No Open Graph / Twitter meta in `BaseLayout.astro`.
 - `.page` in `BaseLayout.astro` uses `min-height: 100vh`; `100dvh` would avoid the mobile browser-chrome gap.
 - `ThemeToggle.astro` has no `aria-pressed` or state in its label.
+- Project screenshots lost `astro:assets` optimization (see Images above).

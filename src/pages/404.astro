@@ -1,0 +1,50 @@
+---
+import Footer from '@/components/layout/Footer.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { SITE } from '@/config/site';
+
+// Por petición, para poder responder con el estado 404 real y no un 200 con cara de error.
+export const prerender = false;
+Astro.response.status = 404;
+---
+
+<BaseLayout title="Página no encontrada">
+  <div data-reveal>
+    <p class="code">404</p>
+    <h1>Aquí no hay nada</h1>
+    <p class="lead">
+      El enlace está roto o la página se movió. Puede que el artículo que buscas ya no esté
+      publicado.
+    </p>
+    <a href="/">← Volver a {SITE.name}</a>
+  </div>
+
+  <Footer />
+</BaseLayout>
+
+<style>
+  .code {
+    margin: 0 0 10px;
+    font-size: 13px;
+    letter-spacing: 0.11em;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  h1 {
+    margin: 0 0 14px;
+    font-size: clamp(30px, 5.4vw, 40px);
+    font-weight: 600;
+    line-height: 1.14;
+    letter-spacing: -0.018em;
+  }
+
+  .lead {
+    margin: 0 0 30px;
+    font-size: clamp(17px, 2.3vw, 19px);
+    line-height: 1.6;
+    color: var(--muted);
+    max-width: 46ch;
+    text-wrap: pretty;
+  }
+</style>

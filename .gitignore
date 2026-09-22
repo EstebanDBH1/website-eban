@@ -9,3 +9,6 @@ _diseno-original/
 # Variables de entorno (la plantilla vive en .env.example).
 .env
 .env.local
+
+# Local Netlify folder
+.netlify

@@ -11,6 +11,7 @@
     "astro": "astro"
   },
   "dependencies": {
+    "@astrojs/netlify": "^8.2.6",
     "@supabase/supabase-js": "^2.117.0",
     "@tiptap/core": "^3.31.3",
     "@tiptap/extension-image": "^3.31.3",
@@ -18,7 +19,8 @@
     "@tiptap/pm": "^3.31.3",
     "@tiptap/starter-kit": "^3.31.3",
     "astro": "^7.3.2",
-    "gsap": "^3.15.0"
+    "gsap": "^3.15.0",
+    "marked": "^18.0.14"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",

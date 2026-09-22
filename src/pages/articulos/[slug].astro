@@ -1,18 +1,18 @@
 ---
-import type { GetStaticPaths } from 'astro';
-import { render } from 'astro:content';
 import { SITE } from '@/config/site';
 import BaseLayout from '@/layouts/BaseLayout.astro';
-import { getPosts } from '@/lib/content';
+import { getPost } from '@/lib/content';
 
-export const getStaticPaths = (async () => {
-  const posts = await getPosts();
-  return posts.map((post) => ({ params: { slug: post.id }, props: { post } }));
-}) satisfies GetStaticPaths;
+// Se renderiza en cada petición: así un artículo publicado desde /admin se ve al recargar,
+// sin reconstruir el sitio. Ya no hay getStaticPaths — la ruta es dinámica.
+export const prerender = false;
 
-const { post } = Astro.props;
+const { slug } = Astro.params;
+const post = slug ? await getPost(slug) : null;
+
+if (!post) return Astro.rewrite('/404');
+
 const { title, excerpt, year, readingTime } = post.data;
-const { Content } = await render(post);
 ---
 
 <BaseLayout title={title} description={excerpt}>
@@ -22,9 +22,8 @@ const { Content } = await render(post);
     <h1 data-reveal>{title}</h1>
     <p class="excerpt" data-reveal>{excerpt}</p>
 
-    <div class="prose" data-reveal>
-      <Content />
-    </div>
+    <!-- El HTML ya viene convertido desde la colección viva (src/live.config.ts). -->
+    <div class="prose" data-reveal set:html={post.rendered?.html} />
 
     <nav data-reveal>
       <a href="/">← Volver al inicio</a>
@@ -78,8 +77,73 @@ const { Content } = await render(post);
     text-wrap: pretty;
   }
 
-  .prose :global(p) {
+  .prose :global(p),
+  .prose :global(ul),
+  .prose :global(ol),
+  .prose :global(blockquote),
+  .prose :global(h2),
+  .prose :global(h3) {
     margin: 0;
+  }
+
+  .prose :global(h2) {
+    margin-top: 16px;
+    font-size: 1.28em;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .prose :global(h3) {
+    margin-top: 12px;
+    font-size: 1.12em;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .prose :global(ul),
+  .prose :global(ol) {
+    padding-left: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .prose :global(blockquote) {
+    padding-left: 18px;
+    border-left: 2px solid var(--rule-strong);
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .prose :global(img) {
+    width: 100%;
+    border-radius: 10px;
+  }
+
+  .prose :global(hr) {
+    width: 100%;
+    border: none;
+    border-top: 1px solid var(--rule);
+  }
+
+  .prose :global(code) {
+    padding: 1px 5px;
+    border-radius: 5px;
+    background: var(--tint);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.88em;
+  }
+
+  .prose :global(pre) {
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: var(--tint);
+    overflow-x: auto;
+  }
+
+  .prose :global(pre code) {
+    padding: 0;
+    background: none;
   }
 
   nav {

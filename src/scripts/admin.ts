@@ -618,7 +618,7 @@ async function save(event: SubmitEvent) {
   setStatus(
     payload.draft
       ? 'Guardado como borrador — no aparecerá en el sitio.'
-      : 'Guardado y publicado. Falta reconstruir el sitio para verlo en la web.',
+      : 'Guardado y publicado. Ya se ve en el sitio.',
     'ok',
   );
   await load();

@@ -8,7 +8,10 @@ import '@/styles/global.css';
  * A diferencia del resto del sitio no usa BaseLayout: aquí no queremos <ClientRouter />,
  * ni GSAP, ni los reveals — es una herramienta, no una página que se lee. Por eso monta
  * su propio <html> y su script arranca directo (ver src/scripts/admin.ts).
+ *
+ * Es estático: todo su trabajo lo hace el navegador contra Supabase.
  */
+export const prerender = true;
 ---
 
 <!doctype html>
@@ -87,8 +90,7 @@ import '@/styles/global.css';
         <ul id="list" class="list"></ul>
 
         <p class="note">
-          Lo que guardes aquí entra en la base de datos. El sitio es estático: aparece en la web
-          cuando se vuelva a construir.
+Lo que guardes aquí aparece en el sitio al recargar. No hace falta reconstruir ni desplegar nada.
         </p>
       </main>
     </div>
