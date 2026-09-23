@@ -8,13 +8,11 @@ interface Props {
   description?: string;
   /** 'article' en los posts; el resto de páginas son 'website'. */
   type?: 'website' | 'article';
-  /** Portada del post. Si falta, se genera una tarjeta con el título (ver src/lib/og.ts). */
+  /** Portada del post. Si falta, se usa la tarjeta por defecto del sitio. */
   image?: string;
-  /** Slug del post, para pedir su tarjeta generada. */
-  ogSlug?: string;
 }
 
-const { title, description = SITE.description, type = 'website', image, ogSlug } = Astro.props;
+const { title, description = SITE.description, type = 'website', image } = Astro.props;
 const pageTitle = title ? `${title} · ${SITE.name}` : SITE.name;
 
 /*
@@ -23,7 +21,7 @@ const pageTitle = title ? `${title} · ${SITE.name}` : SITE.name;
   en los previews de rama y en local.
 */
 const canonical = new URL(Astro.url.pathname, Astro.url.origin).href;
-const ogImage = image ?? new URL(`/og/${ogSlug ?? 'home'}.png`, Astro.url.origin).href;
+const ogImage = new URL(image ?? '/og.png', Astro.url.origin).href;
 ---
 
 <!doctype html>

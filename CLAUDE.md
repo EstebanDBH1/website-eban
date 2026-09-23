@@ -28,7 +28,6 @@ All of them need `.env` and a reachable Supabase project.
 | `/` | `prerender = false` | reads posts and projects live |
 | `/posts/[slug]` | `prerender = false` | reads the post live; no `getStaticPaths` |
 | `/404` | `prerender = false` | so it can return a real 404 status, not a 200 |
-| `/og/[slug].png` | `prerender = false` | renders the share card for that post |
 | `/sitemap.xml` | `prerender = false` | lists posts straight from the database |
 | `/admin` | `prerender = true` | pure client-side; all its work happens in the browser |
 
@@ -87,12 +86,9 @@ Drafts never need filtering in code: the anon key plus RLS only ever returns `dr
 
 `BaseLayout.astro` emits canonical, Open Graph and Twitter tags on every page; post pages also carry `BlogPosting` JSON-LD. URLs are built from `Astro.url.origin`, not from a constant, so previews and local dev produce correct absolute URLs too.
 
-**Share cards are generated on the fly** by `src/lib/og.ts` (satori → SVG, resvg-wasm → PNG), so a post has a proper card even with no cover image. If it does have one, `image_url` is used instead and the generator is never called.
+**The share card is a static image**, `public/og.png`. A post uses its own `image_url` when it has one and falls back to that card otherwise.
 
-Two decisions in there that are load-bearing:
-
-- **The font is a static WOFF, not the variable TTF.** Satori cannot parse variable fonts — it throws `Cannot read properties of undefined`. `public/fonts/newsreader-600.woff` is a single-weight instance (30 KB, from Fontsource).
-- **The font and `public/resvg.wasm` are fetched over HTTP from the site's own origin**, not imported, so nothing depends on how the adapter bundles binary files. Both are cached in module scope, so they only cost on a cold start. `initWasm` accepts one call per process, which is why its promise is cached too.
+It started out generated per request with satori + resvg-wasm, which works locally but **crashes the Netlify function on load** — only the `/og/` routes 502'd, the rest of the site stayed up. Do not reach for that again without budgeting time for it: the function has a hard 10 s limit and those two modules did not survive the bundle. If per-post cards are wanted, generating them in the browser at save time (Canvas) and uploading to Storage avoids the serverless path entirely.
 
 The sitemap is generated per request rather than with `@astrojs/sitemap`: that integration walks build-time routes, and posts do not exist until someone asks for them.
 

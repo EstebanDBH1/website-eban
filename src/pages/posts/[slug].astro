@@ -27,11 +27,11 @@ const schema = {
   publisher: { '@type': 'Person', name: SITE.name },
   inLanguage: SITE.lang,
   url: new URL(Astro.url.pathname, Astro.url.origin).href,
-  image: image ?? new URL(`/og/${post.id}.png`, Astro.url.origin).href,
+  image: new URL(image ?? '/og.png', Astro.url.origin).href,
 };
 ---
 
-<BaseLayout title={title} description={excerpt} type="article" image={image} ogSlug={post.id}>
+<BaseLayout title={title} description={excerpt} type="article" image={image}>
   <article>
     <a href="/" class="back" data-reveal>← {SITE.name}</a>
     <p class="meta" data-reveal>{year} · {readingTime} de lectura</p>
