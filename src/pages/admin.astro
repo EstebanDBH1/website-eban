@@ -1,4 +1,5 @@
 ---
+import { Font } from 'astro:assets';
 import { SITE } from '@/config/site';
 import '@/styles/global.css';
 
@@ -23,12 +24,7 @@ export const prerender = true;
     <!-- Es una herramienta privada: fuera de los buscadores. -->
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap"
-    />
+    <Font cssVariable="--font-montreal" />
     <script is:inline>
       try {
         const saved = localStorage.getItem('eb-theme');
@@ -118,7 +114,7 @@ Lo que guardes aquí aparece en el sitio al recargar. No hace falta reconstruir 
 
     <style is:global>
       /* El panel es una herramienta: tipografía de sistema para lo que se opera,
-         y la serif del sitio solo en los títulos, para que se sienta la misma casa. */
+         y la tipografía del sitio solo en los títulos, para que se sienta la misma casa. */
       body {
         font-family:
           ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -127,7 +123,7 @@ Lo que guardes aquí aparece en el sitio al recargar. No hace falta reconstruir 
 
       h1,
       h2 {
-        font-family: 'Newsreader', Georgia, serif;
+        font-family: var(--font-montreal);
         font-weight: 600;
         letter-spacing: -0.012em;
       }
@@ -608,11 +604,11 @@ Lo que guardes aquí aparece en el sitio al recargar. No hace falta reconstruir 
         overscroll-behavior: contain;
       }
 
-      /* El texto se escribe con la misma serif del sitio: lo que ves es lo que se publica. */
+      /* El texto se escribe con la misma tipografía del sitio: lo que ves es lo que se publica. */
       .editor-content {
         min-height: 180px;
         padding: 16px 18px;
-        font-family: 'Newsreader', Georgia, serif;
+        font-family: var(--font-montreal);
         font-size: 17px;
         line-height: 1.65;
         outline: none;

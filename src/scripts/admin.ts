@@ -151,6 +151,24 @@ function setStatus(message: string, kind: 'info' | 'error' | 'ok' = 'info') {
   status.hidden = !message;
 }
 
+/**
+ * Renueva la caché del CDN tras un cambio (ver src/pages/api/purge.ts). Devuelve false si
+ * falló: lo guardado está a salvo en la base, solo tardará unos minutos en verse.
+ */
+async function purgeSite() {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return false;
+  try {
+    const res = await fetch('/api/purge', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+const PURGE_FAILED = ' (El sitio puede tardar unos minutos en mostrarlo.)';
+
 /** Los errores de Postgres llegan con jerga; traducimos los que se ven a diario. */
 function explain(error: { message: string; code?: string }) {
   const { message, code } = error;
@@ -285,6 +303,7 @@ async function move(index: number, direction: number) {
 
   const failed = results.find((result) => result.error);
   if (failed?.error) return setStatus(explain(failed.error), 'error');
+  setStatus((await purgeSite()) ? '' : `Orden guardado.${PURGE_FAILED}`);
   await load();
 }
 
@@ -301,7 +320,8 @@ async function remove(row: Row) {
   const path = typeof url === 'string' ? url.split(`/${IMAGE_BUCKET}/`)[1] : undefined;
   if (path) await supabase.storage.from(IMAGE_BUCKET).remove([decodeURIComponent(path)]);
 
-  setStatus(`«${label}» borrado.`, 'ok');
+  const purged = await purgeSite();
+  setStatus(`«${label}» borrado.${purged ? '' : PURGE_FAILED}`, 'ok');
   await load();
 }
 
@@ -621,10 +641,14 @@ async function save(event: SubmitEvent) {
   if (error) return setStatus(explain(error), 'error');
 
   closeEditor();
+  // También al guardar un borrador: puede que antes estuviera publicado y haya que quitarlo.
+  const purged = await purgeSite();
   setStatus(
     payload.draft
       ? 'Guardado como borrador — no aparecerá en el sitio.'
-      : 'Guardado y publicado. Ya se ve en el sitio.',
+      : purged
+        ? 'Guardado y publicado. Ya se ve en el sitio.'
+        : `Guardado y publicado.${PURGE_FAILED}`,
     'ok',
   );
   await load();

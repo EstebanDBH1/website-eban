@@ -54,6 +54,7 @@ interface PostRow {
   image_url: string | null;
   body: string | null;
   sort_order: number;
+  created_at: string;
   updated_at: string;
 }
 
@@ -83,6 +84,9 @@ const postData = (row: PostRow) => ({
   readingTime: readingTime(row.body ?? ''),
   image: row.image_url ?? undefined,
   order: row.sort_order,
+  /** Para los datos estructurados del post y el <lastmod> del sitemap. */
+  published: new Date(row.created_at),
+  updated: new Date(row.updated_at),
 });
 
 const projectData = (row: ProjectRow) => ({

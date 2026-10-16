@@ -1,4 +1,5 @@
 ---
+import { Font } from 'astro:assets';
 import { ClientRouter } from 'astro:transitions';
 import { SITE } from '@/config/site';
 import '@/styles/global.css';
@@ -10,10 +11,30 @@ interface Props {
   type?: 'website' | 'article';
   /** Portada del post. Si falta, se usa la tarjeta por defecto del sitio. */
   image?: string;
+  /** Texto alternativo de `image`. */
+  imageAlt?: string;
+  /** Solo en artículos: fechas para og:article y para que Google sepa si está al día. */
+  published?: Date;
+  modified?: Date;
+  /** Datos estructurados (JSON-LD) de la página. */
+  schema?: object;
+  /** Fuera de los buscadores (la 404, por ejemplo). */
+  noindex?: boolean;
 }
 
-const { title, description = SITE.description, type = 'website', image } = Astro.props;
-const pageTitle = title ? `${title} · ${SITE.name}` : SITE.name;
+const {
+  title,
+  description = SITE.description,
+  type = 'website',
+  image,
+  imageAlt,
+  published,
+  modified,
+  schema,
+  noindex = false,
+} = Astro.props;
+const pageTitle = title ? `${title} · ${SITE.name}` : `${SITE.name} · ${SITE.tagline}`;
+const shareTitle = title ?? pageTitle;
 
 /*
   Absolutas y no relativas: las redes sociales no resuelven rutas relativas al previsualizar
@@ -22,6 +43,7 @@ const pageTitle = title ? `${title} · ${SITE.name}` : SITE.name;
 */
 const canonical = new URL(Astro.url.pathname, Astro.url.origin).href;
 const ogImage = new URL(image ?? '/og.png', Astro.url.origin).href;
+const ogImageAlt = imageAlt ?? shareTitle;
 ---
 
 <!doctype html>
@@ -36,33 +58,43 @@ const ogImage = new URL(image ?? '/og.png', Astro.url.origin).href;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{pageTitle}</title>
     <meta name="description" content={description} />
-    <link rel="canonical" href={canonical} />
+    <meta name="author" content={SITE.name} />
+    {noindex && <meta name="robots" content="noindex" />}
+    {!noindex && <link rel="canonical" href={canonical} />}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
 
+    <!--
+      Servida desde el propio sitio (ver `fonts` en astro.config.mjs). `preload` descarga los
+      woff2 a la vez que el HTML en lugar de esperar a que el CSS los descubra. Solo la
+      redonda: la cursiva sale en pocos sitios y puede llegar después.
+    -->
+    <Font cssVariable="--font-montreal" preload={[{ style: 'normal' }]} />
+
     <!-- Tarjeta al compartir: Open Graph la leen WhatsApp, LinkedIn, Slack, Telegram… -->
     <meta property="og:type" content={type} />
-    <meta property="og:title" content={title ?? SITE.name} />
+    <meta property="og:title" content={shareTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
     <meta property="og:image" content={ogImage} />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content={title ?? SITE.name} />
+    {!image && <meta property="og:image:width" content="1200" />}
+    {!image && <meta property="og:image:height" content="630" />}
+    <meta property="og:image:alt" content={ogImageAlt} />
     <meta property="og:site_name" content={SITE.name} />
-    <meta property="og:locale" content="es_ES" />
+    <meta property="og:locale" content={SITE.locale} />
+    {published && <meta property="article:published_time" content={published.toISOString()} />}
+    {modified && <meta property="article:modified_time" content={modified.toISOString()} />}
+    {type === 'article' && <meta property="article:author" content={SITE.name} />}
 
     <!-- X usa las suyas; summary_large_image es la tarjeta ancha con imagen arriba. -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content={title ?? SITE.name} />
+    <meta name="twitter:title" content={shareTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap"
-    />
+    <meta name="twitter:image:alt" content={ogImageAlt} />
+
+    {schema && <script type="application/ld+json" is:inline set:html={JSON.stringify(schema)} />}
+
     <!--
       Antes del primer pintado: aplica el tema guardado y oculta los bloques [data-reveal]
       para que GSAP los revele (ver src/scripts/page-transitions.ts).

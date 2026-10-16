@@ -8,7 +8,7 @@ export const prerender = false;
 Astro.response.status = 404;
 ---
 
-<BaseLayout title="Página no encontrada">
+<BaseLayout title="Página no encontrada" noindex>
   <div data-reveal>
     <p class="code">404</p>
     <h1>Aquí no hay nada</h1>

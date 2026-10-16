@@ -6,14 +6,49 @@ import SocialLinks from '@/components/home/SocialLinks.astro';
 import Footer from '@/components/layout/Footer.astro';
 import Header from '@/components/layout/Header.astro';
 import Section from '@/components/ui/Section.astro';
+import { SITE, SOCIAL_LINKS } from '@/config/site';
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import { CONTENT_CACHE } from '@/lib/cache';
 
 // Se renderiza en cada petición: lee Supabase en vivo, así lo que publicas desde /admin
-// aparece al recargar sin reconstruir el sitio.
+// aparece al recargar sin reconstruir el sitio. El CDN guarda la copia (ver src/lib/cache.ts).
 export const prerender = false;
+Astro.cache.set(CONTENT_CACHE);
+
+/*
+  Datos estructurados: le dicen a Google quién es la persona detrás del sitio. Es lo que
+  alimenta el panel de conocimiento cuando alguien busca tu nombre. `sameAs` enlaza tus
+  perfiles; solo entran los que ya tienen URL real.
+*/
+const home = new URL('/', Astro.url.origin).href;
+const person = {
+  '@type': 'Person',
+  '@id': `${home}#person`,
+  name: SITE.name,
+  url: home,
+  jobTitle: SITE.tagline,
+  description: SITE.description,
+  knowsAbout: SITE.topics,
+  sameAs: SOCIAL_LINKS.map((link) => link.href).filter((href) => href.startsWith('http')),
+};
+const schema = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    person,
+    {
+      '@type': 'WebSite',
+      '@id': `${home}#website`,
+      url: home,
+      name: SITE.name,
+      description: SITE.description,
+      inLanguage: SITE.lang,
+      author: { '@id': person['@id'] },
+    },
+  ],
+};
 ---
 
-<BaseLayout>
+<BaseLayout schema={schema}>
   <Header />
   <Intro />
 

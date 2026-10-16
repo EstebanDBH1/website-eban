@@ -19,6 +19,8 @@ Deployed on **Netlify** from GitHub (`EstebanDBH1/website-eban`, branch `main`).
 
 All of them need `.env` and a reachable Supabase project.
 
+If `astro dev` serves scripts with `504 (Outdated Optimize Dep)` (no theme toggle, no GSAP), Vite tried to re-bundle deps mid-session and Windows blocked the folder rename (`EPERM`). Add the late-discovered import to `vite.optimizeDeps.include` in `astro.config.mjs`, run `astro dev stop`, delete `node_modules/.vite` and start again. The adapter's `devFeatures.edgeFunctions` is off because emulating them needs a current Deno and otherwise covers every page with an error overlay.
+
 ## Rendering model
 
 `output: 'static'` **with the Netlify adapter**, so pages are static by default and opt into on-demand rendering one by one:
@@ -29,7 +31,10 @@ All of them need `.env` and a reachable Supabase project.
 | `/posts/[slug]` | `prerender = false` | reads the post live; no `getStaticPaths` |
 | `/404` | `prerender = false` | so it can return a real 404 status, not a 200 |
 | `/sitemap.xml` | `prerender = false` | lists posts straight from the database |
+| `/api/purge` | `prerender = false` | purges the CDN cache after an admin edit |
 | `/admin` | `prerender = true` | pure client-side; all its work happens in the browser |
+
+**The on-demand pages are cached on Netlify's CDN** (`cache: { provider: cacheNetlify() }` in `astro.config.mjs`, options in `src/lib/cache.ts`). `/`, `/posts/[slug]` and `/sitemap.xml` call `Astro.cache.set(CONTENT_CACHE)`: 10 min fresh, a week of stale-while-revalidate, all tagged `content`. Without it every visit woke the function and queried Supabase (~2.5 s TTFB cold). Publishing stays instant because `admin.ts` calls `POST /api/purge` after every save, delete and reorder; that route checks `is_admin()` with the caller's JWT and purges the `content` tag. If the purge fails the panel says so, and the 10 min `maxAge` bounds how stale it can get. Set the cache **after** the 404 check in post pages so missing slugs are never stored. `Astro.cache` does nothing in `astro dev`.
 
 The trade this buys and costs: publishing is instant, but **the site now depends on Supabase being up**. `src/lib/content.ts` throws when a query fails, on purpose — an error page is better than a blank homepage that looks like nothing was ever written.
 
@@ -84,7 +89,9 @@ Drafts never need filtering in code: the anon key plus RLS only ever returns `dr
 
 ## Sharing and SEO
 
-`BaseLayout.astro` emits canonical, Open Graph and Twitter tags on every page; post pages also carry `BlogPosting` JSON-LD. URLs are built from `Astro.url.origin`, not from a constant, so previews and local dev produce correct absolute URLs too.
+`BaseLayout.astro` emits canonical, Open Graph and Twitter tags on every page, and takes a `schema` prop for JSON-LD: the home page declares `Person` + `WebSite`, post pages `BlogPosting` (with dates from `created_at`/`updated_at`) + `BreadcrumbList`, sharing the person's `@id`. The home `<title>` and default description come from `SITE.tagline` / `SITE.description` in `src/config/site.ts` — that is where the search keywords live. `sameAs` fills itself from `SOCIAL_LINKS` once they have real URLs. The 404 passes `noindex`.
+
+**Fonts** are self-hosted through Astro's fonts API (`fonts` in `astro.config.mjs`, `<Font>` in the layouts, `var(--font-montreal)` in CSS). The face is PP Neue Montreal, loaded from `src/assets/fonts/` with `fontProviders.local()`. Only the Medium file exists, declared as weight `400 700` so browsers never fake a bold; add real weights as extra variants. URLs are built from `Astro.url.origin`, not from a constant, so previews and local dev produce correct absolute URLs too.
 
 **The share card is a static image**, `public/og.png`. A post uses its own `image_url` when it has one and falls back to that card otherwise.
 

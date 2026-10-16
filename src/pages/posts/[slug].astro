@@ -1,6 +1,7 @@
 ---
 import { SITE } from '@/config/site';
 import BaseLayout from '@/layouts/BaseLayout.astro';
+import { CONTENT_CACHE } from '@/lib/cache';
 import { getPost } from '@/lib/content';
 
 // Se renderiza en cada petición: así un post publicado desde /admin se ve al recargar,
@@ -12,26 +13,57 @@ const post = slug ? await getPost(slug) : null;
 
 if (!post) return Astro.rewrite('/404');
 
-const { title, excerpt, year, readingTime, image } = post.data;
+// Después del 404: solo se guarda en el CDN lo que existe.
+Astro.cache.set(CONTENT_CACHE);
+
+const { title, excerpt, year, readingTime, image, published, updated } = post.data;
+const url = new URL(Astro.url.pathname, Astro.url.origin).href;
+const home = new URL('/', Astro.url.origin).href;
+const coverAlt = `Portada de ${title}`;
 
 /*
   Datos estructurados: lo que le dice a Google que esto es un artículo con autor y no una
-  página cualquiera. Es lo que habilita los resultados enriquecidos en la búsqueda.
+  página cualquiera. Es lo que habilita los resultados enriquecidos en la búsqueda. El
+  `@id` del autor es el mismo que declara la portada, así Google une los dos.
 */
+const author = { '@type': 'Person', '@id': `${home}#person`, name: SITE.name, url: home };
 const schema = {
   '@context': 'https://schema.org',
-  '@type': 'BlogPosting',
-  headline: title,
-  description: excerpt,
-  author: { '@type': 'Person', name: SITE.name },
-  publisher: { '@type': 'Person', name: SITE.name },
-  inLanguage: SITE.lang,
-  url: new URL(Astro.url.pathname, Astro.url.origin).href,
-  image: new URL(image ?? '/og.png', Astro.url.origin).href,
+  '@graph': [
+    {
+      '@type': 'BlogPosting',
+      headline: title,
+      description: excerpt,
+      author,
+      publisher: author,
+      inLanguage: SITE.lang,
+      url,
+      mainEntityOfPage: url,
+      image: new URL(image ?? '/og.png', Astro.url.origin).href,
+      datePublished: published.toISOString(),
+      dateModified: updated.toISOString(),
+    },
+    {
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: SITE.name, item: home },
+        { '@type': 'ListItem', position: 2, name: title, item: url },
+      ],
+    },
+  ],
 };
 ---
 
-<BaseLayout title={title} description={excerpt} type="article" image={image}>
+<BaseLayout
+  title={title}
+  description={excerpt}
+  type="article"
+  image={image}
+  imageAlt={image && coverAlt}
+  published={published}
+  modified={updated}
+  schema={schema}
+>
   <article>
     <a href="/" class="back" data-reveal>← {SITE.name}</a>
     <p class="meta" data-reveal>{year} · {readingTime} de lectura</p>
@@ -41,7 +73,7 @@ const schema = {
     {
       image && (
         <figure class="cover" data-reveal>
-          <img src={image} alt={`Portada de ${title}`} loading="eager" />
+          <img src={image} alt={coverAlt} loading="eager" fetchpriority="high" decoding="async" />
         </figure>
       )
     }
@@ -54,8 +86,6 @@ const schema = {
       <span>{SITE.name}</span>
     </nav>
   </article>
-
-  <script type="application/ld+json" is:inline set:html={JSON.stringify(schema)} />
 </BaseLayout>
 
 <style>

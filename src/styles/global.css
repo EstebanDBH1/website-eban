@@ -43,7 +43,7 @@ body {
 body {
   background: var(--bg);
   color: var(--ink);
-  font-family: 'Newsreader', 'Iowan Old Style', Georgia, serif;
+  font-family: var(--font-montreal);
   -webkit-font-smoothing: antialiased;
 }
 
