@@ -14,7 +14,40 @@ import { setupHomeTextReveal, SPLIT_SELECTOR } from '@/scripts/text-reveal';
 const REVEAL = '[data-reveal]';
 const ENTER_ATTR = 'data-page-enter';
 
+/**
+ * Tope de espera antes de animar la entrada. Si algo tarda más, entramos igual; queda por
+ * debajo del respaldo de 3 s de global.css, que muestra el contenido si el JS no corre.
+ */
+const READY_TIMEOUT_MS = 2000;
+
 const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function nextFrame() {
+  return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+/**
+ * Espera a que lo que se ve al entrar esté listo: la fuente y las imágenes en pantalla.
+ * Si la animación arranca antes, la fuente llega a mitad (las líneas se re-dividen y saltan)
+ * y las fotos aparecen de golpe cuando el resto ya entró.
+ */
+async function pageReady() {
+  // fonts.ready solo cuenta las fuentes que ya empezaron a cargar; pedirla la fuerza.
+  const font = document.fonts.load(`1em ${getComputedStyle(document.body).fontFamily}`);
+  const images = [...document.images].filter(
+    // Las de un <dialog> cerrado no se ven, y las lazy fuera de pantalla nunca cargarían.
+    (img) => !img.closest('dialog') && img.getBoundingClientRect().top < window.innerHeight,
+  );
+  const ready = Promise.all([
+    font.then(() => document.fonts.ready),
+    ...images.map((img) => img.decode().catch(() => {})),
+  ]).catch(() => {});
+
+  await Promise.race([ready, new Promise((resolve) => setTimeout(resolve, READY_TIMEOUT_MS))]);
+  // Dos frames: el layout con la fuente real ya está asentado antes del primer cuadro animado.
+  await nextFrame();
+  await nextFrame();
+}
 
 /** Sube en cada salida; sirve para que cada página entre una sola vez y descartar entradas viejas. */
 let navigation = 0;
@@ -63,12 +96,15 @@ async function enter() {
   const root = document.documentElement;
   if (enteredNavigation === navigation || !root.hasAttribute(ENTER_ATTR)) return;
   enteredNavigation = navigation;
+  const current = navigation;
+
+  await pageReady();
+  // Si mientras esperábamos ya se navegó a otra página, descartamos esta entrada.
+  if (current !== navigation) return;
 
   if (!document.querySelector(SPLIT_SELECTOR)) return revealBlocks();
 
-  const current = navigation;
   const cleanup = await setupHomeTextReveal();
-  // Si mientras esperábamos las fuentes ya se navegó a otra página, descartamos esta entrada.
   if (current !== navigation) return cleanup();
 
   cleanupPage = cleanup;
